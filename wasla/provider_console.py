@@ -119,7 +119,9 @@ def action(tenant_id:str,ident:str,action:str,data:dict,request:Request,u=Depend
 
 @router.get('/api/admin/workspaces/{tenant_id}/integration-operations')
 def operations(tenant_id:str,u=Depends(user)):
-    return api.operations(scoped_provider(tenant_id,u))
+    delegate=scoped_provider(tenant_id,u)
+    from .service_health import queue_health
+    return {**api.operations(delegate),'health':queue_health(tenant_id)}
 
 @router.get('/api/admin/workspaces/{tenant_id}/integration-readiness')
 def workspace_readiness(tenant_id:str,u=Depends(user)):

@@ -23,6 +23,12 @@ jobs:
       - run: node --check wasla/static/provider-console.js
       - run: node --check wasla/static/service-oauth.js
       - run: python -m unittest discover -s tests -v
+      - name: Synthetic V2 load and duplicate-delivery integrity
+        run: python -m scripts.benchmark_service --messages 1000 --workers 4 --output /tmp/wasla-v2-benchmark.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-v2-benchmark
+          path: /tmp/wasla-v2-benchmark.json
 
   postgres:
     runs-on: ubuntu-latest
