@@ -12,6 +12,7 @@ from .db import transaction, one, rows, audit, now, uid, postgres
 from .main import user, text, choice, operation, assignee
 from .security import permit
 from . import service as s
+from .runtime_configuration import value as configured_value
 
 router=APIRouter()
 
@@ -80,7 +81,7 @@ def disconnect(ident:str,u=Depends(user)):
 @router.get('/api/webhooks/v2/{channel}')
 def verify(channel:str,request:Request):
     if channel not in {'whatsapp','instagram'}: raise HTTPException(409,'unsupported_webhook')
-    secret=os.getenv('META_VERIFY_TOKEN',''); q=request.query_params
+    secret=configured_value('META_VERIFY_TOKEN'); q=request.query_params
     import hmac
     if secret and q.get('hub.mode')=='subscribe' and hmac.compare_digest(q.get('hub.verify_token','').encode(),secret.encode()): return PlainTextResponse(q.get('hub.challenge',''))
     raise HTTPException(403,'verification_failed')
@@ -88,7 +89,7 @@ def verify(channel:str,request:Request):
 @router.post('/api/webhooks/v2/{channel}')
 async def receive(channel:str,request:Request):
     if channel not in {'whatsapp','instagram'}: raise HTTPException(409,'unsupported_webhook')
-    secret=os.getenv('META_APP_SECRET','') if channel=='whatsapp' else os.getenv('INSTAGRAM_APP_SECRET','')
+    secret=configured_value('META_APP_SECRET') if channel=='whatsapp' else configured_value('INSTAGRAM_APP_SECRET')
     if not secret: raise HTTPException(503,'app_secret_missing')
     raw=await request.body()
     if not s.valid_signature(raw,request.headers.get('X-Hub-Signature-256',''),secret): raise HTTPException(401,'invalid_signature')

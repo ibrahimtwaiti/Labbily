@@ -2,10 +2,12 @@
 import os
 import tempfile
 import uvicorn
+from cryptography.fernet import Fernet
 os.environ.pop('DATABASE_URL',None)
 os.environ.pop('DATABASE_URL_UNPOOLED',None)
 with tempfile.TemporaryDirectory(prefix='wasla-browser-') as folder:
     os.environ.update(WASLA_DB=folder+'/test.sqlite3',WASLA_ENV='development',WASLA_ORIGIN='http://127.0.0.1:8000',WASLA_SETUP_TOKEN='b'*48,WASLA_SETUP_EXPIRES='4102444800')
+    os.environ['WASLA_TOKEN_ENCRYPTION_KEY']=Fernet.generate_key().decode()
     from wasla.db import initialize,transaction,now
     from wasla.security import hash_password
     initialize()

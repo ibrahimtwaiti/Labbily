@@ -5,6 +5,7 @@ import os
 from fastapi import Depends, HTTPException
 from .db import transaction, one, rows, postgres, audit, now
 from .main import user, text
+from .runtime_configuration import value as configured_value
 from .security import permit
 from .service_api import router, integer
 
@@ -46,7 +47,7 @@ def redact_one(u):
             from .service_media import client
             storage=client()
             # Block downloads before deletion. Any failed object deletion rolls back DB redaction.
-            for m in attachments:storage.delete_object(Bucket=os.environ['WASLA_MEDIA_BUCKET'],Key=m['object_key'])
+            for m in attachments:storage.delete_object(Bucket=configured_value('WASLA_MEDIA_BUCKET'),Key=m['object_key'])
         messages=rows(db,'SELECT * FROM service_messages WHERE ticket_id=?',(tid,))
         for m in messages:
             db.execute("UPDATE service_outbox SET payload='{}' WHERE message_id=?",(m['id'],))

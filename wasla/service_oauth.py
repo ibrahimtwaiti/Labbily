@@ -14,6 +14,8 @@ from .main import user
 from .security import permit, digest
 from .service_api import router, get
 
+from .runtime_configuration import value as configured_value
+
 SCOPES={'instagram_business_basic','instagram_business_manage_messages'}
 
 def cipher():
@@ -35,23 +37,23 @@ def read_token(account):
     except InvalidToken: raise HTTPException(503,'oauth_secret_unavailable')
 
 def redirect_uri():
-    origin=os.getenv('WASLA_ORIGIN','').rstrip('/')
+    origin=configured_value('WASLA_OAUTH_ORIGIN',os.getenv('WASLA_ORIGIN','')).rstrip('/')
     if not origin.startswith('https://'): raise HTTPException(503,'oauth_requires_https_origin')
     return origin+'/api/v2/oauth/instagram/callback'
 
 def consume(state,request,u):
     with transaction() as db:
         row=one(db,'SELECT s.*,a.tenant_id FROM service_oauth_states s JOIN service_accounts a ON a.id=s.account_id WHERE s.state_hash=?',(digest(state),))
-        if not row or row['tenant_id']!=u['tenant_id'] or row['user_id']!=u['id'] or row['session_hash']!=digest(request.cookies.get('wasla_session','')) or row['expires_at']<=int(time.time()) or row['consumed_at']:
+        if not row or (u['role']!='provider' and row['tenant_id']!=u['tenant_id']) or row['user_id']!=u['id'] or row['session_hash']!=digest(request.cookies.get('wasla_session','')) or row['expires_at']<=int(time.time()) or row['consumed_at']:
             raise HTTPException(403,'invalid_or_expired_oauth_state')
         changed=db.execute('UPDATE service_oauth_states SET consumed_at=? WHERE state_hash=? AND consumed_at IS NULL',(int(time.time()),digest(state)))
         if changed.rowcount!=1: raise HTTPException(403,'oauth_state_already_used')
-        return get(db,'service_accounts',row['account_id'],u)
+        return get(db,'service_accounts',row['account_id'],{**u,'tenant_id':row['tenant_id']})
 
 @router.post('/api/v2/accounts/{ident}/oauth/start')
 def start(ident:str,request:Request,u=Depends(user)):
-    permit(u,'settings'); cipher(); callback=redirect_uri(); app_id=os.getenv('INSTAGRAM_APP_ID','')
-    if not app_id or not os.getenv('INSTAGRAM_APP_SECRET'): raise HTTPException(503,'instagram_app_not_configured')
+    permit(u,'settings'); cipher(); callback=redirect_uri(); app_id=configured_value('INSTAGRAM_APP_ID')
+    if not app_id or not configured_value('INSTAGRAM_APP_SECRET'): raise HTTPException(503,'instagram_app_not_configured')
     with transaction() as db:
         a=get(db,'service_accounts',ident,u)
         if a['channel']!='instagram': raise HTTPException(409,'instagram_login_only')
@@ -69,15 +71,16 @@ def landing():
 
 @router.post('/api/v2/oauth/instagram/complete')
 def callback(data:dict,request:Request,u=Depends(user)):
-    permit(u,'settings'); a=consume(str(data.get('state','')),request,u)
+    if u['role']!='provider':permit(u,'settings')
+    a=consume(str(data.get('state','')),request,u)
     if data.get('error'):
 
         with transaction() as db:audit(db,u,'service.oauth.denied',a['id'])
-        return {'redirect':'/app/channels?oauth=denied'}
+        return {'redirect':('/app/integrations?oauth=denied' if u['role']=='provider' else '/app/channels?oauth=denied')}
     code=data.get('code','')
     if not isinstance(code,str) or not code or len(code)>4096: raise HTTPException(400,'authorization_code_missing')
     try:
-        response=httpx.post('https://api.instagram.com/oauth/access_token',data={'client_id':os.environ['INSTAGRAM_APP_ID'],'client_secret':os.environ['INSTAGRAM_APP_SECRET'],'grant_type':'authorization_code','redirect_uri':redirect_uri(),'code':code},timeout=15)
+        response=httpx.post('https://api.instagram.com/oauth/access_token',data={'client_id':configured_value('INSTAGRAM_APP_ID'),'client_secret':configured_value('INSTAGRAM_APP_SECRET'),'grant_type':'authorization_code','redirect_uri':redirect_uri(),'code':code},timeout=15)
         response.raise_for_status(); result=response.json()
         if 'data' in result:
             if len(result['data'])!=1: raise ValueError()
@@ -86,7 +89,7 @@ def callback(data:dict,request:Request,u=Depends(user)):
         granted=result.get('permissions',[])
         if isinstance(granted,str):granted=granted.split(',')
         if not SCOPES.issubset(set(granted)): raise HTTPException(409,'required_permissions_not_granted')
-        extended=httpx.get('https://graph.instagram.com/access_token',params={'grant_type':'ig_exchange_token','client_secret':os.environ['INSTAGRAM_APP_SECRET'],'access_token':result['access_token']},timeout=15)
+        extended=httpx.get('https://graph.instagram.com/access_token',params={'grant_type':'ig_exchange_token','client_secret':configured_value('INSTAGRAM_APP_SECRET'),'access_token':result['access_token']},timeout=15)
         extended.raise_for_status(); long=extended.json(); expires=int(long['expires_in'])
         if expires<=0: raise ValueError()
         encrypted=cipher().encrypt(long['access_token'].encode()).decode()
@@ -97,7 +100,7 @@ def callback(data:dict,request:Request,u=Depends(user)):
         db.execute('INSERT INTO service_secrets VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET ciphertext=excluded.ciphertext,issued_at=excluded.issued_at',(a['id'],encrypted,int(time.time())))
         db.execute("UPDATE service_accounts SET token_ref=?,scopes=?,expires_at=?,state='unverified' WHERE id=?",('vault:'+a['id'],json.dumps(sorted(SCOPES)),int(time.time())+expires,a['id']))
         audit(db,u,'service.oauth.connected',a['id'])
-    return {'redirect':'/app/channels?oauth=connected'}
+    return {'redirect':('/app/integrations?oauth=connected' if u['role']=='provider' else '/app/channels?oauth=connected')}
 
 @router.post('/api/v2/accounts/{ident}/oauth/refresh')
 def refresh(ident:str,u=Depends(user)):

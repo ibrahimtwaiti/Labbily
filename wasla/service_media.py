@@ -13,24 +13,26 @@ from .main import user, text
 from .security import permit
 from .service_api import router, get
 
+from .runtime_configuration import value as configured_value
+
 MAX_BYTES=2*1024*1024
 MIME={'image/png':b'\x89PNG\r\n\x1a\n','image/jpeg':b'\xff\xd8\xff','application/pdf':b'%PDF-'}
 
 def client():
     import boto3
     names=['WASLA_MEDIA_ENDPOINT','WASLA_MEDIA_BUCKET','WASLA_MEDIA_ACCESS_KEY_ID','WASLA_MEDIA_SECRET_ACCESS_KEY']
-    if any(not os.getenv(n) for n in names): raise HTTPException(503,'private_media_storage_not_configured')
-    endpoint=os.environ[names[0]];host=urlparse(endpoint)
+    if any(not configured_value(n) for n in names): raise HTTPException(503,'private_media_storage_not_configured')
+    endpoint=configured_value(names[0]);host=urlparse(endpoint)
     if host.scheme!='https' or not host.hostname or not host.hostname.endswith('.r2.cloudflarestorage.com') or host.username or host.password:
         raise HTTPException(503,'invalid_private_media_endpoint')
-    return boto3.client('s3',endpoint_url=endpoint,region_name='auto',aws_access_key_id=os.environ[names[2]],aws_secret_access_key=os.environ[names[3]])
+    return boto3.client('s3',endpoint_url=endpoint,region_name='auto',aws_access_key_id=configured_value(names[2]),aws_secret_access_key=configured_value(names[3]))
 
 def validate(raw,mime):
     if not raw or len(raw)>MAX_BYTES: raise HTTPException(413,'attachment_size_limit_2mb')
     if mime not in MIME or not raw.startswith(MIME[mime]): raise HTTPException(422,'unsupported_or_mismatched_attachment_type')
 
 def scan(raw,mime):
-    validate(raw,mime);url=os.getenv('WASLA_MEDIA_SCANNER_URL','');secret=os.getenv('WASLA_MEDIA_SCANNER_TOKEN','')
+    validate(raw,mime);url=configured_value('WASLA_MEDIA_SCANNER_URL');secret=configured_value('WASLA_MEDIA_SCANNER_TOKEN')
     if not url.startswith('https://') or not secret:raise HTTPException(503,'attachment_scanner_not_configured')
     checksum=hashlib.sha256(raw).hexdigest()
     try:
@@ -43,7 +45,7 @@ def scan(raw,mime):
 
 def media_url(record):
     if record['scan_state']!='clean':raise HTTPException(409,'attachment_not_clean')
-    return client().generate_presigned_url('get_object',Params={'Bucket':os.environ['WASLA_MEDIA_BUCKET'],'Key':record['object_key'],'ResponseContentType':record['mime_type'],'ResponseContentDisposition':'attachment'},ExpiresIn=120)
+    return client().generate_presigned_url('get_object',Params={'Bucket':configured_value('WASLA_MEDIA_BUCKET'),'Key':record['object_key'],'ResponseContentType':record['mime_type'],'ResponseContentDisposition':'attachment'},ExpiresIn=120)
 
 @router.post('/api/v2/tickets/{ident}/attachments',status_code=201)
 def upload(ident:str,data:dict,u=Depends(user)):
@@ -55,7 +57,7 @@ def upload(ident:str,data:dict,u=Depends(user)):
     try:raw=base64.b64decode(encoded,validate=True)
     except (binascii.Error,ValueError):raise HTTPException(422,'invalid_base64_attachment')
     validate(raw,mime);storage=client();checksum=scan(raw,mime);mid=uid();key='tenants/'+u['tenant_id']+'/attachments/'+mid
-    try:storage.put_object(Bucket=os.environ['WASLA_MEDIA_BUCKET'],Key=key,Body=raw,ContentType=mime,Metadata={'sha256':checksum,'scan':'clean'})
+    try:storage.put_object(Bucket=configured_value('WASLA_MEDIA_BUCKET'),Key=key,Body=raw,ContentType=mime,Metadata={'sha256':checksum,'scan':'clean'})
     except Exception:raise HTTPException(503,'attachment_storage_failed')
     try:
         with transaction() as db:
@@ -64,7 +66,7 @@ def upload(ident:str,data:dict,u=Depends(user)):
             audit(db,u,'service.attachment.uploaded',mid)
     except Exception:
         # Compensate only the object created by this request.
-        storage.delete_object(Bucket=os.environ['WASLA_MEDIA_BUCKET'],Key=key)
+        storage.delete_object(Bucket=configured_value('WASLA_MEDIA_BUCKET'),Key=key)
         raise
     return {'id':mid,'mime_type':mime,'size_bytes':len(raw),'scan_state':'clean'}
 
@@ -125,7 +127,7 @@ def process_media():
             storage=client()
             raw,mime=fetch_provider_media(a,__import__('json').loads(job['descriptor']));checksum=scan(raw,mime)
             key='tenants/'+job['tenant_id']+'/attachments/'+job['id']
-            storage.put_object(Bucket=os.environ['WASLA_MEDIA_BUCKET'],Key=key,Body=raw,ContentType=mime,Metadata={'sha256':checksum,'scan':'clean'})
+            storage.put_object(Bucket=configured_value('WASLA_MEDIA_BUCKET'),Key=key,Body=raw,ContentType=mime,Metadata={'sha256':checksum,'scan':'clean'})
             db.execute('INSERT INTO service_media VALUES(?,?,?,?,?,?,?,?,?)',(job['id'],job['tenant_id'],m['ticket_id'],key,mime,len(raw),checksum,'clean',int(time.time())))
             db.execute("UPDATE service_media_jobs SET state='complete',media_id=?,descriptor='{}',error='' WHERE id=?",(job['id'],job['id']))
             db.execute("UPDATE service_messages SET body='[مرفق جاهز للتنزيل الآمن]' WHERE id=?",(m['id'],))

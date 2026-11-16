@@ -7,6 +7,7 @@ from .main import user, text
 from .security import permit
 from .service_api import router, get
 from . import service as s
+from .runtime_configuration import value as configured_value
 
 @router.put('/api/v2/accounts/{ident}/approval')
 def approval(ident:str,data:dict,u=Depends(user)):
@@ -52,7 +53,7 @@ def readiness(u=Depends(user)):
     permit(u,'settings')
     with transaction() as db:accounts=rows(db,'SELECT * FROM service_accounts WHERE tenant_id=?',(u['tenant_id'],))
     return {'accounts':[{'id':a['id'],'channel':a['channel'],'approval_documented':bool(a['approval_reference']),'credentials_configured':bool(s.token(a)),'inbound_observed':bool(a['last_inbound_at']),'outbound_accepted':bool(a['last_outbound_at']),'expires_at':a['expires_at'],'state':a['state']} for a in accounts],
-        'media_configuration':{k:bool(os.getenv(k)) for k in ['WASLA_MEDIA_ENDPOINT','WASLA_MEDIA_BUCKET','WASLA_MEDIA_ACCESS_KEY_ID','WASLA_MEDIA_SECRET_ACCESS_KEY','WASLA_MEDIA_SCANNER_URL','WASLA_MEDIA_SCANNER_TOKEN']},
+        'media_configuration':{k:bool(configured_value(k)) for k in ['WASLA_MEDIA_ENDPOINT','WASLA_MEDIA_BUCKET','WASLA_MEDIA_ACCESS_KEY_ID','WASLA_MEDIA_SECRET_ACCESS_KEY','WASLA_MEDIA_SCANNER_URL','WASLA_MEDIA_SCANNER_TOKEN']},
         'tiktok':'blocked_pending_approved_business_messaging_contract','production_approved':False}
 
 @router.post('/api/v2/identities/{ident}/crm')
