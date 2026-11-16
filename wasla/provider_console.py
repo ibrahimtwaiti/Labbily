@@ -121,6 +121,29 @@ def action(tenant_id:str,ident:str,action:str,data:dict,request:Request,u=Depend
 def operations(tenant_id:str,u=Depends(user)):
     return api.operations(scoped_provider(tenant_id,u))
 
+@router.get('/api/admin/workspaces/{tenant_id}/integration-readiness')
+def workspace_readiness(tenant_id:str,u=Depends(user)):
+    from .service_channels import readiness
+    return readiness(scoped_provider(tenant_id,u))
+
+@router.get('/api/admin/workspaces/{tenant_id}/integration-agents')
+def workspace_agents(tenant_id:str,u=Depends(user)):
+    scoped_provider(tenant_id,u)
+    with transaction() as db:
+        return rows(db,"SELECT id,name,role FROM users WHERE tenant_id=? AND active=1 AND role IN ('admin','supervisor','sales') ORDER BY name",(tenant_id,))
+
+@router.post('/api/admin/workspaces/{tenant_id}/integration-operations/{kind}/{ident}')
+def recover_operation(tenant_id:str,kind:str,ident:str,data:dict,u=Depends(user)):
+    delegate=scoped_provider(tenant_id,u)
+    if kind=='event-retry':result=api.retry(ident,delegate)
+    elif kind=='media-retry':
+        from .service_media import retry_media
+        result=retry_media(ident,delegate)
+    elif kind=='reconcile':result=api.reconcile(ident,data,delegate)
+    else:raise HTTPException(404,'unsupported_recovery_action')
+    with transaction() as db:audit(db,u,'provider.integration.'+kind,ident,tenant_id)
+    return result
+
 @router.get('/api/admin/workspaces/{tenant_id}/integration-settings')
 def workspace_settings(tenant_id:str,u=Depends(user)):
     return api.get_settings(scoped_provider(tenant_id,u))

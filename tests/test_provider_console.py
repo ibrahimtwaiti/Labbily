@@ -74,3 +74,49 @@ class ProviderConsole(unittest.TestCase):
         self.assertFalse(self.client.get('/api/admin/workspaces/b/integration-settings').json()['sending_paused'])
         self.assertEqual(self.client.get('/api/admin/workspaces/unknown/integration-settings').status_code,404)
         self.login('admin-a');self.assertEqual(self.client.get(path).status_code,403)
+
+    def test_provider_recovery_scoped_audited_and_never_resends(self):
+        from test_service_v2 import ServiceV2
+        aid=ServiceV2.account(self)
+        _,ticket,_,_=ServiceV2.incoming(self,aid)
+        self.assertEqual(ServiceV2.enqueue(self,ticket).status_code,201)
+        with transaction() as db:
+            event=one(db,'SELECT id FROM service_events WHERE account_id=?',(aid,))['id']
+            out=one(db,'SELECT * FROM service_outbox WHERE tenant_id=?',('a',))
+            message=one(db,"SELECT id FROM service_messages WHERE ticket_id=? AND direction='in'",(ticket['id'],))['id']
+            db.execute("UPDATE service_events SET state='dead' WHERE id=?",(event,))
+            db.execute("UPDATE service_outbox SET state='unknown' WHERE id=?",(out['id'],))
+            db.execute("INSERT INTO service_media_jobs(id,tenant_id,message_id,account_id,descriptor,state) VALUES('media-recovery','a',?,?,?,'dead')",(message,aid,'{}'))
+        self.login('provider');path='/api/admin/workspaces/a/integration-operations/'
+        self.assertEqual(self.client.get('/api/admin/workspaces/a/integration-readiness').status_code,200)
+        for kind,ident in [('event-retry',event),('media-retry','media-recovery'),('reconcile',out['id'])]:
+            data={'action':'cancel','evidence':'Confirmed cancellation by operator'}
+            self.assertEqual(self.client.post('/api/admin/workspaces/b/integration-operations/'+kind+'/'+ident,json=data).status_code,404)
+        self.assertEqual(self.client.post(path+'event-retry/'+event,json={}).status_code,200)
+        self.assertEqual(self.client.post(path+'event-retry/'+event,json={}).status_code,404)
+        self.assertEqual(self.client.post(path+'media-retry/media-recovery',json={}).status_code,200)
+        self.assertEqual(self.client.post(path+'media-retry/media-recovery',json={}).status_code,409)
+        self.assertEqual(self.client.post(path+'reconcile/'+out['id'],json={'action':'accepted','evidence':'short'}).status_code,422)
+        self.assertEqual(self.client.post(path+'reconcile/'+out['id'],json={'action':'accepted','evidence':'Verified in platform console'}).status_code,422)
+        self.assertEqual(self.client.post(path+'reconcile/'+out['id'],json={'action':'accepted','evidence':'Verified in platform console','provider_id':'confirmed-provider-id'}).status_code,200)
+        with transaction() as db:
+            self.assertEqual(one(db,'SELECT state FROM service_outbox WHERE id=?',(out['id'],))['state'],'accepted')
+            self.assertEqual(one(db,'SELECT provider_id FROM service_messages WHERE id=?',(out['message_id'],))['provider_id'],'confirmed-provider-id')
+            self.assertIsNotNone(one(db,"SELECT * FROM audit WHERE action='provider.integration.reconcile' AND entity_id=?",(out['id'],)))
+        self.login('admin-a')
+        self.assertEqual(self.client.post(path+'event-retry/'+event,json={}).status_code,403)
+        self.assertEqual(self.client.get('/api/admin/workspaces/a/integration-readiness').status_code,403)
+
+    def test_staff_calendar_validation_and_scope(self):
+        self.setup_console();path='/api/admin/workspaces/a'
+        agents=self.client.get(path+'/integration-agents').json()
+        self.assertTrue(agents);self.assertNotIn('password',str(agents));self.assertNotIn('admin-b',str(agents))
+        config=self.client.get(path+'/integration-settings').json()
+        config.update(workdays=[0,2,6],holidays=['2026-02-30'])
+        self.assertEqual(self.client.put(path+'/integration-settings',json=config).status_code,422)
+        config.update(holidays=['2026-12-01'],available_agents=[agents[0]['id']])
+        self.assertEqual(self.client.put(path+'/integration-settings',json=config).status_code,200)
+        self.assertEqual(self.client.get(path+'/integration-settings').json()['holidays'],['2026-12-01'])
+        config['available_agents']=['admin-b']
+        self.assertEqual(self.client.put(path+'/integration-settings',json=config).status_code,422)
+        self.login('admin-a');self.assertEqual(self.client.get(path+'/integration-agents').status_code,403)

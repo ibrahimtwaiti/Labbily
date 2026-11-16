@@ -6,6 +6,7 @@ import json
 import os
 import re
 import time
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from .db import transaction, one, rows, audit, now, uid, postgres
@@ -224,6 +225,9 @@ def put_settings(data:dict,u=Depends(user)):
     days=data.get('workdays'); holidays=data.get('holidays',[]); agents=data.get('available_agents',[])
     if not isinstance(days,list) or not days or any(type(x) is not int or not 0<=x<=6 for x in days): raise HTTPException(422,'invalid_workdays')
     if not isinstance(holidays,list) or len(holidays)>366 or any(not isinstance(d,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',d) for d in holidays): raise HTTPException(422,'invalid_holidays')
+    try:
+        for day in holidays: date.fromisoformat(day)
+    except ValueError: raise HTTPException(422,'invalid_holidays')
     if not isinstance(agents,list) or len(agents)>200 or any(not isinstance(a,str) for a in agents): raise HTTPException(422,'invalid_agents')
     config.update(workdays=days,holidays=holidays,available_agents=agents,sending_paused=data.get('sending_paused') is True)
     with transaction() as db:
