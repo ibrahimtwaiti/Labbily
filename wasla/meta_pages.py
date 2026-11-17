@@ -26,7 +26,8 @@ class SelectPage(BaseModel):
 
 def config(u):
     permit(u,'settings')
-    if value('META_SIGNUP_MODE')!='test' or u['tenant_id'] not in value('META_TEST_TENANTS').split(','):raise HTTPException(409,'meta_test_workspace_required')
+    from .launch import meta_gate
+    meta_gate(u['tenant_id'],'messenger')
     c={k:value(k) for k in ['META_APP_ID','META_APP_SECRET','META_FACEBOOK_CONFIG_ID','META_GRAPH_VERSION','META_SYSTEM_USER_TOKEN']}
     if not all(c.values()) or c['META_GRAPH_VERSION'] not in SUPPORTED_VERSIONS:raise HTTPException(503,'facebook_configuration_required')
     cipher();return c
@@ -45,7 +46,7 @@ def listing(u=Depends(user)):
     try:config(u);available=True
     except HTTPException:available=False
     with transaction() as db:accounts=rows(db,"SELECT a.id,a.label,a.provider_id,a.state,a.expires_at,p.subscription_state FROM service_accounts a JOIN meta_page_connections p ON p.account_id=a.id WHERE a.tenant_id=?",(u['tenant_id'],))
-    return {'signup_available':available,'mode':'test','production_approved':False,'accounts':accounts,'supported':['page_profile','messenger_text','message_delivery_events','message_read_events'],'optional_permission_features':{'page_publishing':'pages_manage_posts'}}
+    return {'signup_available':available,'mode':value('META_SIGNUP_MODE'),'meta_approval_verified':False,'accounts':accounts,'supported':['page_profile','messenger_text','message_delivery_events','message_read_events'],'optional_permission_features':{'page_publishing':'pages_manage_posts'}}
 
 @router.post('/api/v2/meta/pages/start')
 def start(request:Request,u=Depends(user)):
@@ -182,3 +183,20 @@ def subscribe_fields(tid,version,page_id,token,requested):
         if str(app.get('id'))==value('META_APP_ID'):
             fields.update(x for x in app.get('subscribed_fields',[]) if isinstance(x,str))
     return graph(tid,version,'page_subscribe',page_id+'/subscribed_apps',token=token,method='POST',payload={'subscribed_fields':sorted(fields)})
+
+def remaining_fields(response,app_id,removed):
+    apps=response.get('data')
+    if not isinstance(apps,list) or any(not isinstance(app,dict) for app in apps):raise HTTPException(502,'invalid_page_subscription')
+    for app in apps:
+        if str(app.get('id'))==app_id:
+            fields=app.get('subscribed_fields')
+            if not isinstance(fields,list) or any(not isinstance(x,str) for x in fields):raise HTTPException(502,'invalid_page_subscription')
+            return sorted(set(fields)-set(removed))
+    return None
+
+def unsubscribe_fields(tid,version,page_id,token,app_id,removed):
+    path=page_id+'/subscribed_apps'
+    current=graph(tid,version,'page_subscription_read',path,token=token)
+    fields=remaining_fields(current,app_id,removed)
+    if fields is None:return {'success':True}
+    return graph(tid,version,'page_unsubscribe_fields',path,token=token,method='POST' if fields else 'DELETE',payload={'subscribed_fields':fields} if fields else None)

@@ -169,7 +169,8 @@ def ig_request(tid,method,url,**kwargs):
 def instagram_configuration(u):
     permit(u,'settings')
     from .meta_onboarding import SUPPORTED_VERSIONS
-    if configured_value('META_SIGNUP_MODE')!='test' or u['tenant_id'] not in configured_value('META_TEST_TENANTS').split(','):raise HTTPException(409,'meta_test_workspace_required')
+    from .launch import meta_gate
+    meta_gate(u['tenant_id'],'instagram')
     appid=configured_value('INSTAGRAM_APP_ID');version=configured_value('META_GRAPH_VERSION');callback=redirect_uri()
     if not appid or not configured_value('INSTAGRAM_APP_SECRET') or version not in SUPPORTED_VERSIONS:raise HTTPException(503,'instagram_app_not_configured')
     cipher();return appid,version,callback

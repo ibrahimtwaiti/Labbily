@@ -146,6 +146,24 @@ class Completion(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM meta_lead_events').fetchone()[0],1);db.execute('UPDATE meta_lead_events SET next_attempt=0')
         with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'id':'31','field_data':[{'name':'email','values':['lead@example.test']}]})):meta_data.process_lead()
         data=self.client.get('/api/v2/meta/data/'+aid+'/records').json()['data'];self.assertEqual(len(data),1);self.assertEqual(data[0]['value']['id'],'31')
+    def test_lead_disconnect_and_erasure_preserve_other_page_subscriptions(self):
+        aid=self.data_connect('leads');path='/api/v2/meta/data/'+aid
+        def responses():
+            request=httpx.Request('GET','https://graph.facebook.com/v26.0/30/subscribed_apps')
+            return [httpx.Response(200,json={'data':[{'id':'123','subscribed_fields':['messages','message_reads','leadgen']}]},request=request),httpx.Response(200,json={'success':True},request=request)]
+        with patch('wasla.meta_onboarding.httpx.request',side_effect=responses()) as request:
+            r=self.client.post(path+'/disconnect',json={});self.assertEqual(r.json()['remote_unsubscribe'],'confirmed',r.text)
+            self.assertEqual(request.call_args.kwargs['json'],{'subscribed_fields':['message_reads','messages']})
+        aid=self.data_connect('leads')
+        r=self.client.post('/api/v2/privacy/deletions',json={'scope':'account','account_id':aid,'password':base.PASSWORD,'confirm':'DELETE'});self.assertEqual(r.status_code,202,r.text)
+        with patch('wasla.privacy.httpx.request',side_effect=responses()) as request:
+            privacy.process_deletion();self.assertEqual(request.call_args.kwargs['json'],{'subscribed_fields':['message_reads','messages']})
+        privacy.process_deletion();self.assertEqual(self.client.get('/api/privacy/deletions/'+r.json()['id']).json()['state'],'completed')
+    def test_lead_disconnect_erases_token_on_provider_failure(self):
+        aid=self.data_connect('leads')
+        with patch('wasla.meta_onboarding.httpx.request',side_effect=httpx.ConnectError('private provider failure')):
+            r=self.client.post('/api/v2/meta/data/'+aid+'/disconnect',json={});self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['remote_unsubscribe'],'not_confirmed')
+        with transaction() as db:self.assertEqual(one(db,'SELECT ciphertext FROM meta_data_connections WHERE id=?',(aid,))['ciphertext'],'')
     def test_messenger_read_watermarks_are_monotonic_and_tenant_scoped(self):
         from wasla.messenger_metrics import apply_watermark
         aid=self.account();clock=int(time.time())
@@ -276,3 +294,18 @@ class Completion(unittest.TestCase):
         with transaction() as db:db.execute("INSERT INTO meta_data_sessions(state_hash,tenant_id,user_id,session_hash,kind,app_id,config_id,api_version,expires_at,ciphertext) VALUES('expired','a','admin-a','session','catalogs','123','456','v26.0',1,'sensitive-encrypted-staged-token')")
         cleanup_expired_security_metadata()
         with transaction() as db:self.assertIsNone(one(db,"SELECT state_hash FROM meta_data_sessions WHERE state_hash='expired'"))
+    def test_launch_configuration_requires_evidence_per_service_and_current_terms(self):
+        plan=self.plan(seats=2)
+        path='/api/admin/integrations/configuration'
+        self.assertEqual(self.client.put(path,json={'values':{'META_SIGNUP_MODE':'enabled','WASLA_SELF_SIGNUP_MODE':'enabled'}}).status_code,200)
+        self.assertFalse(self.client.get('/api/public/plans').json()['signup_enabled'])
+        self.login();self.assertFalse(any(s['available'] for s in self.client.get('/api/v2/meta/data').json()['services']))
+        self.login('provider')
+        values={'META_APPROVAL_REFERENCE':'synthetic review reference - test only','META_APPROVED_SERVICES':'catalogs','WASLA_SIGNUP_APPROVAL_REFERENCE':'synthetic owner review - test only','WASLA_SIGNUP_TERMS_VERSION':'terms-2026-11'}
+        self.assertEqual(self.client.put(path,json={'values':values}).status_code,200)
+        self.login();services={s['kind']:s['available'] for s in self.client.get('/api/v2/meta/data').json()['services']};self.assertTrue(services['catalogs']);self.assertFalse(services['marketing']);self.assertFalse(services['leads'])
+        policy=self.client.get('/api/public/plans').json();self.assertTrue(policy['signup_enabled']);self.assertFalse(policy['payment_collection_enabled'])
+        body={'company':'Reviewed shop','name':'Owner','email':'reviewed@example.test','password':'reviewed-password-123456','terms_version':'sandbox-v1','plan_id':plan}
+        self.assertEqual(self.client.post('/api/auth/register',json=body).status_code,409)
+        r=self.client.post('/api/auth/register',json={**body,'terms_version':policy['terms_version']});self.assertEqual(r.status_code,202,r.text);self.assertEqual(r.json()['mode'],'trial')
+        with transaction() as db:self.assertEqual(one(db,"SELECT terms_version FROM service_registrations r JOIN users u ON u.id=r.user_id WHERE u.email='reviewed@example.test'")['terms_version'],'terms-2026-11')

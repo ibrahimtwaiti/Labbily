@@ -66,7 +66,7 @@ def complete(data:Verify,request:Request):
         capacity(db,r['tenant_id'],'seat')
         if db.execute('UPDATE email_verifications SET verified_at=?,token_hash=? WHERE user_id=? AND verified_at IS NULL AND token_hash=? AND expires_at>?',(int(time.time()),'',r['user_id'],digest(token),int(time.time()))).rowcount!=1:raise HTTPException(409,'verification_expired_or_used')
         db.execute('UPDATE users SET active=1 WHERE id=?',(r['user_id'],))
-        db.execute("UPDATE service_registrations SET status='approved',review_evidence='email_verified_sandbox' WHERE user_id=?",(r['user_id'],))
+        db.execute("UPDATE service_registrations SET status='approved',review_evidence='email_verified' WHERE user_id=?",(r['user_id'],))
         db.execute("UPDATE email_jobs SET ciphertext='',state='verified' WHERE user_id=?",(r['user_id'],))
     return {'status':'verified','next':'/login','mode':'sandbox'}
 

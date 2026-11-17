@@ -1,5 +1,7 @@
 # Wasla V2 candidate
 
+حالة استكمال التطوير والاختبارات الحالية: [DEVELOPMENT_COMPLETION_AUDIT.md](DEVELOPMENT_COMPLETION_AUDIT.md). [تشغيل التكاملات والبريد والحذف وحدود الشركات](docs/meta/COMPLETION_OPERATIONS_AR.md) و[OpenAPI الفعلي](docs/openapi.json). الأقسام الخاصة بـV1 أدناه تاريخية؛ التفعيل الحي والاعتمادات والتحصيل المالي مراحل مستقلة.
+
 مرشح خدمة العملاء متعدد القنوات قيد التحقق. راجع [تنفيذ الدليل والحدود وبوابات الإطلاق](docs/V2_GUIDE_IMPLEMENTATION_AR.md). لا يعني وجود الموصلات اكتمال الموافقات أو الاختبار الحي.
 
 # Wasla | وصلة — V1

@@ -34,7 +34,8 @@ class Sync(BaseModel):
 def config(kind,u):
     permit(u,'settings')
     if kind not in SPECS:raise HTTPException(404,'unsupported_meta_service')
-    if value('META_SIGNUP_MODE')!='test' or u['tenant_id'] not in value('META_TEST_TENANTS').split(','):raise HTTPException(409,'meta_test_workspace_required')
+    from .launch import meta_gate
+    meta_gate(u['tenant_id'],kind)
     c={k:value(k) for k in ['META_APP_ID','META_APP_SECRET','META_GRAPH_VERSION','META_SYSTEM_USER_TOKEN']}
     c['config_id']=value(SPECS[kind]['config'])
     if kind=='marketing':c['META_GRAPH_VERSION']=value('META_MARKETING_API_VERSION','v25.0')
@@ -197,10 +198,20 @@ def records(ident:str,kind:str='',offset:int=0,u=Depends(user)):
 @router.post('/api/v2/meta/data/{ident}/disconnect')
 def disconnect(ident:str,u=Depends(user)):
     permit(u,'settings')
+    with transaction() as db:a=get(db,'meta_data_connections',ident,u)
+    remote='not_applicable'
+    if a['kind']=='leads' and a['ciphertext']:
+        remote='not_confirmed'
+        try:
+            from .meta_pages import unsubscribe_fields
+            result=unsubscribe_fields(a['tenant_id'],a['api_version'],a['provider_id'],unseal(a['ciphertext']),a['app_id'],{'leadgen'})
+            if result.get('success') is True:remote='confirmed'
+        except HTTPException:pass
     with transaction() as db:
-        get(db,'meta_data_connections',ident,u,True)
-        db.execute("UPDATE meta_data_connections SET state='disconnected',ciphertext='' WHERE id=?",(ident,));audit(db,u,'meta.data.disconnected',ident)
-    return {'local':'disconnected','remote_user_permissions':'Manage in Meta Business Integrations; grant may cover other assets.'}
+        current=get(db,'meta_data_connections',ident,u,True)
+        if current['ciphertext']!=a['ciphertext']:raise HTTPException(409,'meta_connection_changed')
+        db.execute("UPDATE meta_data_connections SET state='disconnected',ciphertext='' WHERE id=?",(ident,));audit(db,u,'meta.data.disconnected',ident,'remote_subscription_'+remote)
+    return {'local':'disconnected','remote_unsubscribe':remote,'remote_user_permissions':'Manage in Meta Business Integrations; grant may cover other assets.'}
 
 @router.post('/api/v2/meta/data/{ident}/leads/subscribe')
 def subscribe_leads(ident:str,u=Depends(user)):

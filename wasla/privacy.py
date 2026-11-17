@@ -66,6 +66,10 @@ def queue(db,tid,requester,scope,accounts=None,data_accounts=None,source=None):
         disconnect_local(db,aid,'privacy_deletion')
         db.execute("UPDATE service_outbox SET state='blocked',error='privacy_deletion' WHERE state='retry' AND message_id IN (SELECT id FROM service_messages WHERE account_id=?)",(aid,))
     if data_accounts:
+        for did in data_accounts:
+            d=one(db,'SELECT * FROM meta_data_connections WHERE id=?',(did,))
+            if d and d['kind']=='leads' and d['ciphertext']:
+                remote.append({'host':'graph.facebook.com','target':d['provider_id']+'/subscribed_apps','version':d['api_version'],'token':unseal(d['ciphertext']),'eligible':True,'remove_fields':['leadgen'],'app_id':d['app_id']})
         db.execute("UPDATE meta_data_connections SET ciphertext='',state='disconnected' WHERE id IN ("+marks(data_accounts)+')',tuple(data_accounts))
     if scope=='tenant':
         db.execute("UPDATE channels SET status='disconnected',token_env='' WHERE tenant_id=?",(tid,))
@@ -196,7 +200,17 @@ def process_deletion():
                 target=remote.pop(0);result='requires_meta_review'
                 if target['eligible']:
                     try:
-                        response=httpx.request('DELETE','https://'+target['host']+'/'+target['version']+'/'+target['target'],headers={'Authorization':'Bearer '+target['token']},timeout=8,follow_redirects=False)
+                        endpoint='https://'+target['host']+'/'+target['version']+'/'+target['target'];headers={'Authorization':'Bearer '+target['token']}
+                        method='DELETE';payload=None
+                        if target.get('remove_fields'):
+                            from .meta_pages import remaining_fields
+                            current=httpx.request('GET',endpoint,headers=headers,timeout=8,follow_redirects=False);current.raise_for_status()
+                            fields=remaining_fields(current.json(),target['app_id'],target['remove_fields'])
+                            if fields is None:response=httpx.Response(200,json={'success':True})
+                            else:
+                                method='POST' if fields else 'DELETE';payload={'subscribed_fields':fields} if fields else None
+                                response=httpx.request(method,endpoint,headers=headers,json=payload,timeout=8,follow_redirects=False)
+                        else:response=httpx.request(method,endpoint,headers=headers,timeout=8,follow_redirects=False)
                         if response.status_code==200 and response.json().get('success') is True:result='confirmed'
                     except Exception:pass
                 status='requires_meta_review' if result!='confirmed' or job['remote_status']=='requires_meta_review' else 'confirmed'

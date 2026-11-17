@@ -8,7 +8,7 @@ test('sandbox plans are backed by API and never collect payments',async({page})=
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 test('signup clearly explains the closed external gate',async({page})=>{
- await page.goto('/signup?lang=en');await expect(page.locator('h1')).toHaveText('Create a sandbox workspace');
+ await page.goto('/signup?lang=en');await expect(page.locator('h1')).toHaveText('Create a workspace');
  await expect(page.locator('button[type=submit]')).toBeDisabled();await expect(page.locator('.notice')).toContainText('currently closed');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

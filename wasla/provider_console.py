@@ -13,14 +13,18 @@ from .runtime_configuration import value
 
 FIELDS={
  **{k:(label,kind) for k,label,kind in [("WASLA_EMAIL_MODE","Email transport: disabled, smtp or local (development)","text"),("WASLA_EMAIL_ORIGIN","Email verification HTTPS origin","url"),("WASLA_SMTP_HOST","SMTP hostname","text"),("WASLA_SMTP_PORT","SMTP port","text"),("WASLA_SMTP_FROM","Sender address","text"),("WASLA_SMTP_USER","SMTP user","text"),("WASLA_SMTP_PASSWORD","SMTP password","secret")]},
- 'WASLA_SELF_SIGNUP_MODE':('Self signup: disabled or test','text'),
+ 'WASLA_SELF_SIGNUP_MODE':('Self signup: disabled, test or enabled after owner review','text'),
+ 'WASLA_SIGNUP_APPROVAL_REFERENCE':('Owner launch approval reference','text'),
+ 'WASLA_SIGNUP_TERMS_VERSION':('Approved signup terms version','text'),
+ 'META_APPROVAL_REFERENCE':('Recorded Meta review/owner launch evidence reference','text'),
+ 'META_APPROVED_SERVICES':('Approved services, comma separated','text'),
  **{k:(k,'text') for k in ['META_CATALOG_CONFIG_ID','META_LEADS_CONFIG_ID','META_MARKETING_CONFIG_ID']},
  'META_MARKETING_API_VERSION':('Marketing API version (independent lifecycle)','text'),
  'META_FACEBOOK_CONFIG_ID':('Facebook Login for Business configuration ID','text'),
  'META_APP_ID':('Meta app ID','text'),
  'META_SIGNUP_CONFIG_ID':('Embedded Signup configuration ID','text'),
  'META_GRAPH_VERSION':('Supported Graph API version','text'),
- 'META_SIGNUP_MODE':('Signup mode: disabled or test','text'),
+ 'META_SIGNUP_MODE':('Signup mode: disabled, test or enabled after review','text'),
  'META_TEST_TENANTS':('Test workspace IDs, comma separated','text'),
  'META_SYSTEM_USER_TOKEN':('System user token for token inspection','secret'),
  'META_APP_SECRET':('WhatsApp app secret','secret'),
@@ -73,7 +77,11 @@ def configure(data:dict,u=Depends(user)):
         if not v:continue # Empty fields preserve current values.
         if k=='WASLA_EMAIL_MODE' and v not in {'disabled','smtp','local'}:raise HTTPException(422,'invalid_email_mode')
         if k=='WASLA_SMTP_PORT' and (not v.isdigit() or not 1<=int(v)<=65535):raise HTTPException(422,'invalid_smtp_port')
-        if k in {'META_SIGNUP_MODE','WASLA_SELF_SIGNUP_MODE'} and v not in {'disabled','test'}:raise HTTPException(422,'test_mode_only_until_launch_review')
+        if k in {'META_SIGNUP_MODE','WASLA_SELF_SIGNUP_MODE'} and v not in {'disabled','test','enabled'}:raise HTTPException(422,'invalid_signup_mode')
+        if k=='META_APPROVED_SERVICES':
+            from .launch import META_SERVICES
+            if {x.strip() for x in v.split(',')}-META_SERVICES:raise HTTPException(422,'invalid_approved_service')
+        if k=='WASLA_SIGNUP_TERMS_VERSION' and not re.fullmatch(r'[A-Za-z0-9._-]{1,80}',v):raise HTTPException(422,'invalid_terms_version')
         if k=='META_MARKETING_API_VERSION' and v!='v25.0':raise HTTPException(422,'marketing_version_review_required')
         if k=='META_GRAPH_VERSION' and v not in {'v25.0','v26.0'}:raise HTTPException(422,'review_supported_graph_version')
         if k in {'META_APP_ID','META_SIGNUP_CONFIG_ID','META_FACEBOOK_CONFIG_ID','META_CATALOG_CONFIG_ID','META_LEADS_CONFIG_ID','META_MARKETING_CONFIG_ID'} and not re.fullmatch(r'[0-9]{1,40}',v):raise HTTPException(422,'numeric_meta_id_required')

@@ -54,8 +54,8 @@ def configuration():
 def enabled(u):
     permit(u,'settings')
     if not u.get('tenant_id'): raise HTTPException(409,'customer_workspace_required')
-    if value('META_SIGNUP_MODE','disabled') != 'test' or u['tenant_id'] not in value('META_TEST_TENANTS').split(','):
-        raise HTTPException(409,'meta_signup_pending_provider_configuration_and_approval')
+    from .launch import meta_gate
+    meta_gate(u['tenant_id'],'whatsapp')
     config = configuration()
     if not all(config.values()) or config['META_GRAPH_VERSION'] not in SUPPORTED_VERSIONS or not config['WASLA_OAUTH_ORIGIN'].startswith('https://'):
         raise HTTPException(503,'meta_signup_configuration_incomplete')
@@ -126,7 +126,7 @@ def readiness(u=Depends(user)):
         connections=rows(db,'''SELECT m.*,a.label,a.provider_id phone_number_id,a.state,a.expires_at,
             a.last_inbound_at,a.last_outbound_at,g.health token_health,g.checked_at token_checked_at FROM meta_connections m JOIN service_accounts a ON a.id=m.account_id LEFT JOIN meta_grants g ON g.account_id=a.id
             WHERE m.tenant_id=?''',(u['tenant_id'],))
-    return {'signup_available':available,'mode': 'test' if available else 'disabled',
+    return {'signup_available':available,'mode': value('META_SIGNUP_MODE') if available else 'disabled',
         'production_approved':False,'meta_approval_verified':False,'connections':connections,
         'services':[{'service':'whatsapp','implementation':'standard_cloud_api_test_candidate'},
                     {'service':'instagram','implementation':'existing_instagram_login_candidate'},

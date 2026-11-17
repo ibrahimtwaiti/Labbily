@@ -35,7 +35,7 @@ class Registration(BaseModel):
     name:str=Field(min_length=2,max_length=120)
     email:str=Field(max_length=254)
     password:SecretStr
-    terms_version:str=Field(pattern=r'^sandbox-v1$')
+    terms_version:str=Field(pattern=r'^[A-Za-z0-9._-]{1,80}$')
     plan_id:str=Field(default='',max_length=80)
 
 def period():return datetime.now(timezone.utc).strftime('%Y-%m')
@@ -115,7 +115,10 @@ def invoice(u=Depends(user)):
 
 @router.post('/api/auth/register',status_code=202)
 def register(data:Registration,request:Request):
-    if value('WASLA_SELF_SIGNUP_MODE','disabled')!='test':raise HTTPException(409,'self_signup_not_enabled')
+    from .launch import signup_policy
+    policy=signup_policy()
+    if not policy['signup_enabled']:raise HTTPException(409,'self_signup_not_enabled')
+    if data.terms_version!=policy['terms_version']:raise HTTPException(409,'signup_terms_changed_reload')
     with transaction() as db:limit(db,'signup:'+digest(request.client.host),5,3600)
     from .email_verification import configuration,enqueue
     configuration()
@@ -132,11 +135,11 @@ def register(data:Registration,request:Request):
             inserted=db.execute("INSERT INTO users VALUES(?,?,?,?,?,'admin',0,?) ON CONFLICT(email) DO NOTHING",(ident,tid,address,data.name,hashed,now())).rowcount
             if not inserted:
                 db.execute("DELETE FROM tenants WHERE id=?",(tid,))
-                return {"status":"pending_email_verification","mode":"sandbox"}
-            db.execute("INSERT INTO service_registrations VALUES(?,?,'pending','sandbox-v1','',?)",(tid,ident,now()))
+                return {"status":"pending_email_verification","mode":policy['mode']}
+            db.execute("INSERT INTO service_registrations VALUES(?,?,'pending',?,'',?)",(tid,ident,data.terms_version,now()))
             db.execute("INSERT INTO service_subscriptions VALUES(?,?,?,'trial',?)",(tid,plan['id'],json.dumps(plan),now()))
             enqueue(db,ident)
-    return {'status':'pending_email_verification','mode':'sandbox'}
+    return {'status':'pending_email_verification','mode':policy['mode']}
 
 @router.post('/api/admin/commerce/registrations/{tenant_id}/approve')
 def approve(tenant_id:str,data:dict,u=Depends(user)):
@@ -161,7 +164,8 @@ def approve(tenant_id:str,data:dict,u=Depends(user)):
 
 @router.get('/api/public/plans')
 def public_plans():
-    with transaction() as db:return {'mode':'sandbox','signup_enabled':value('WASLA_SELF_SIGNUP_MODE')=='test','plans':plan_list(db)}
+    from .launch import signup_policy
+    with transaction() as db:return {**signup_policy(),'payment_collection_enabled':False,'plans':plan_list(db)}
 
 @router.post('/api/v2/billing/plan')
 def choose_plan(data:Subscription,u=Depends(user)):
