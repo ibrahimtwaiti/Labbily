@@ -147,3 +147,16 @@ class PostgreSQLAcceptance(unittest.TestCase):
         with ThreadPoolExecutor(2) as pool:self.assertEqual(sorted(pool.map(reserve,range(2))),[200,429])
         with self.assertRaises(psycopg.errors.ForeignKeyViolation):
             with transaction() as db:db.execute('INSERT INTO meta_grants VALUES(?,?,?,?,NULL,?)',(aid,self.b,'123','hash','unchecked'))
+
+    def test_rate_limit_is_atomic_under_concurrency(self):
+        from wasla.security import limit
+        from fastapi import HTTPException
+        key='pg-rate-'+uid()
+        def attempt(_):
+            try:
+                with transaction() as db:limit(db,key,5,600)
+                return 200
+            except HTTPException as error:return error.status_code
+        with ThreadPoolExecutor(8) as pool:results=list(pool.map(attempt,range(20)))
+        self.assertEqual(results.count(200),5);self.assertEqual(results.count(429),15)
+        with transaction() as db:self.assertEqual(db.execute('SELECT count FROM rate_limits WHERE key=?',(key,)).fetchone()[0],5)
