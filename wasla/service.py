@@ -36,6 +36,7 @@ def valid_signature(raw, header, secret):
     return bool(secret) and hmac.compare_digest(expected.encode(), header.encode('utf-8'))
 
 def token(account):
+    if account.get('state')=='disconnected': return ''
     # Account mapping is provisioned by an operator, never an arbitrary env name from a tenant.
     if account.get('token_ref','').startswith('vault:'):
         from .service_oauth import read_token
@@ -157,6 +158,9 @@ def process_event():
         return False
 
 def policy(db,a,ticket,payload):
+    binding=one(db,'SELECT * FROM meta_connections WHERE account_id=? AND tenant_id=?',(a['id'],a['tenant_id']))
+    if binding and (binding['subscription_state']!='subscribed' or binding['registration_state']!='registered'):
+        raise HTTPException(409,'meta_onboarding_incomplete')
     if not capabilities(a['channel'])['messaging']: raise HTTPException(409,'channel_not_supported_for_customer_messaging')
     if a['state']!='verified': raise HTTPException(409,'channel_requires_connection_check')
     if not token(a): raise HTTPException(409,'channel_credentials_missing')

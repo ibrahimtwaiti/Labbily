@@ -1,5 +1,6 @@
 'use strict';
 const integrationLabels={
+ META_APP_ID:["معرف تطبيق Meta","Meta app ID"],META_SIGNUP_CONFIG_ID:["معرف إعداد Embedded Signup","Embedded Signup configuration ID"],META_GRAPH_VERSION:["إصدار Graph المراجع: v25.0 أو v26.0","Reviewed Graph version: v25.0 or v26.0"],META_SIGNUP_MODE:["وضع الربط: disabled أو test","Signup mode: disabled or test"],META_TEST_TENANTS:["معرفات شركات الاختبار مفصولة بفاصلة","Test workspace IDs, comma separated"],META_SYSTEM_USER_TOKEN:["رمز مستخدم النظام لفحص التفويض","System user token for authorization inspection"],
  META_APP_SECRET:['سر تطبيق واتساب','WhatsApp app secret'],META_VERIFY_TOKEN:['رمز التحقق من استقبال الأحداث','Webhook verification token'],
  INSTAGRAM_APP_ID:['معرف تطبيق إنستغرام','Instagram app ID'],INSTAGRAM_APP_SECRET:['سر تطبيق إنستغرام','Instagram app secret'],
  WASLA_OAUTH_ORIGIN:['عنوان المنصة المعتمد للعودة بعد التفويض','Approved platform callback origin'],

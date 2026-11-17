@@ -12,6 +12,12 @@ from .service_oauth import cipher
 from .runtime_configuration import value
 
 FIELDS={
+ 'META_APP_ID':('Meta app ID','text'),
+ 'META_SIGNUP_CONFIG_ID':('Embedded Signup configuration ID','text'),
+ 'META_GRAPH_VERSION':('Supported Graph API version','text'),
+ 'META_SIGNUP_MODE':('Signup mode: disabled or test','text'),
+ 'META_TEST_TENANTS':('Test workspace IDs, comma separated','text'),
+ 'META_SYSTEM_USER_TOKEN':('System user token for token inspection','secret'),
  'META_APP_SECRET':('WhatsApp app secret','secret'),
  'META_VERIFY_TOKEN':('Webhook verification token','secret'),
  'INSTAGRAM_APP_ID':('Instagram app ID','text'),
@@ -59,7 +65,10 @@ def configure(data:dict,u=Depends(user)):
     encrypted={};crypt=cipher()
     for k,v in fields.items():
         if not isinstance(v,str) or len(v)>8192:raise HTTPException(422,'invalid_configuration_value')
-        if not v:continue # Empty secret fields preserve current values.
+        if not v:continue # Empty fields preserve current values.
+        if k=='META_SIGNUP_MODE' and v not in {'disabled','test'}:raise HTTPException(422,'test_mode_only_until_launch_review')
+        if k=='META_GRAPH_VERSION' and v not in {'v25.0','v26.0'}:raise HTTPException(422,'review_supported_graph_version')
+        if k in {'META_APP_ID','META_SIGNUP_CONFIG_ID'} and not re.fullmatch(r'[0-9]{1,40}',v):raise HTTPException(422,'numeric_meta_id_required')
         if FIELDS[k][1]=='url':
             parsed=urlparse(v)
             if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:raise HTTPException(422,'https_url_required')

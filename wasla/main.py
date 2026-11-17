@@ -52,6 +52,8 @@ async def protect(request, call_next):
     response.headers['X-Frame-Options']='DENY'
     response.headers['Referrer-Policy']='same-origin'
     response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    if request.url.path=='/app' or request.url.path.startswith('/app/'):
+        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self' https://connect.facebook.net; style-src 'self'; img-src 'self' data: https://www.facebook.com; connect-src 'self' https://www.facebook.com https://graph.facebook.com; frame-src https://www.facebook.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
     if os.getenv('WASLA_ENV')=='production': response.headers['Strict-Transport-Security']='max-age=31536000'
@@ -594,7 +596,7 @@ def sitemap():
     return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls+'</urlset>',media_type='application/xml')
 
 from .service_api import router as service_router
-from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console
+from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')
@@ -610,3 +612,12 @@ def shell(path:str,request:Request):
     known=path in {'','services','platform','how-it-works','about','faq','pricing','privacy','terms','request','login','setup'} or path.startswith('app/') or path=='app' or path in {'services/'+s['id'] for s in SERVICES}
     if private or not known: source=source.replace('</head>','<meta name="robots" content="noindex,nofollow"></head>')
     return HTMLResponse(source,status_code=200 if known else 404,headers={'Cache-Control':'no-store','Vary':'Cookie'})
+
+# Never reflect OAuth codes or registration PINs in Pydantic error payloads.
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+@app.exception_handler(RequestValidationError)
+async def safe_validation(request,exc):
+    if request.url.path.startswith('/api/v2/meta/'):
+        return JSONResponse({'detail':'invalid_meta_request'},status_code=422)
+    return await request_validation_exception_handler(request,exc)

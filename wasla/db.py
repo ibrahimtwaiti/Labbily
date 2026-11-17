@@ -101,6 +101,10 @@ def migrate():
                 for statement in (ROOT / 'migrations/006_provider_console.sql').read_text().split(';'):
                     if statement.strip(): conn.execute(statement)
 
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=6').fetchone() is None:
+                for statement in (ROOT / 'migrations/007_meta_onboarding.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
+
 def initialize():
     if postgres():
         with transaction() as db:
@@ -114,6 +118,8 @@ def initialize():
                 raise RuntimeError('V2 completion migration missing: python -m wasla.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=5'):
                 raise RuntimeError('Provider console migration missing: python -m wasla.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=6'):
+                raise RuntimeError('Meta onboarding migration missing: python -m wasla.cli init')
         return
     Path(path()).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path()) as db:
@@ -131,6 +137,8 @@ def initialize():
             db.executescript((ROOT / "migrations/005_service_completion.sql").read_text())
         if not db.execute("SELECT version FROM schema_migrations WHERE version=5").fetchone():
             db.executescript((ROOT / "migrations/006_provider_console.sql").read_text())
+        if not db.execute("SELECT version FROM schema_migrations WHERE version=6").fetchone():
+            db.executescript((ROOT / "migrations/007_meta_onboarding.sql").read_text())
         db.commit()
 
 def audit(db, user, action, entity, detail=''):

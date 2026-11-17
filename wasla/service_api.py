@@ -74,6 +74,7 @@ def disconnect(ident:str,u=Depends(user)):
     permit(u,'settings')
     with transaction() as db:
         get(db,'service_accounts',ident,u); db.execute("UPDATE service_accounts SET state='disconnected',token_ref='' WHERE id=?",(ident,))
+        db.execute("UPDATE meta_connections SET subscription_state='disconnected',registration_state='pending' WHERE account_id=?",(ident,))
         db.execute('DELETE FROM service_secrets WHERE account_id=?',(ident,))
         db.execute('DELETE FROM service_oauth_states WHERE account_id=?',(ident,))
         audit(db,u,'service.account.disconnected',ident)
