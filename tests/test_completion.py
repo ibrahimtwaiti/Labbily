@@ -55,6 +55,10 @@ class Completion(unittest.TestCase):
         with patch('wasla.email_verification.smtplib.SMTP',return_value=smtp):mail.process_email()
         smtp.__enter__.return_value.starttls.assert_called_once();smtp.__enter__.return_value.send_message.assert_called_once()
         with transaction() as db:self.assertEqual(one(db,'SELECT ciphertext FROM email_jobs')['ciphertext'],'')
+        os.environ['WASLA_EMAIL_MODE']='local'
+        for origin in ['ftp://localhost','http://localhost/path','http://user@localhost','http://localhost/#fragment']:
+            os.environ['WASLA_EMAIL_ORIGIN']=origin
+            with self.assertRaises(HTTPException):mail.configuration()
     def test_limits_block_direct_api_reactivation_and_meta_requests(self):
         plan=self.plan(seats=4,channels=0,meta_accounts=0,api_requests=1)
         self.assertEqual(self.client.put('/api/admin/commerce/subscriptions/a',json={'plan_id':plan,'status':'trial'}).status_code,200)
@@ -74,6 +78,7 @@ class Completion(unittest.TestCase):
             ticket=one(db,'SELECT id FROM service_tickets')['id']
             db.execute('INSERT INTO service_media VALUES(?,?,?,?,?,?,?,?,?)',(uid(),'a',ticket,'a/private-object','image/png',1,'hash','clean',int(time.time())))
             db.execute("INSERT INTO retention_holds VALUES('tenant','a','legal dispute',NULL,?)",(now(),))
+            db.execute("INSERT INTO retention_holds VALUES('ticket',?,'expired private reason','2000-01-01',?)",(ticket,now()))
         self.login();r=self.client.post('/api/v2/privacy/deletions',json={'scope':'tenant','password':base.PASSWORD,'confirm':'DELETE'});self.assertEqual(r.status_code,202,r.text);ident=r.json()['id']
         self.assertEqual(self.client.get('/api/me').status_code,401)
         privacy.process_deletion();self.assertEqual(self.client.get('/api/privacy/deletions/'+ident).json()['state'],'blocked_hold')
@@ -88,6 +93,7 @@ class Completion(unittest.TestCase):
         self.assertEqual(self.client.get('/api/privacy/deletions/'+ident).json()['state'],'completed')
         with transaction() as db:
             self.assertIsNone(one(db,"SELECT id FROM tenants WHERE id='a'"));self.assertIsNotNone(one(db,"SELECT id FROM tenants WHERE id='b'"))
+            self.assertIsNone(one(db,'SELECT entity_id FROM retention_holds WHERE entity_id=?',(ticket,)))
             for table in ['service_messages','service_accounts','users','contacts','audit']:
                 self.assertEqual(db.execute('SELECT count(*) FROM '+table+' WHERE tenant_id=?',('a',)).fetchone()[0],0)
     def test_user_deletion_last_admin_and_reauthentication(self):
@@ -97,6 +103,17 @@ class Completion(unittest.TestCase):
         r=self.client.post('/api/v2/privacy/deletions',json=body);self.assertEqual(r.status_code,202,r.text);privacy.process_deletion()
         with transaction() as db:
             u=one(db,"SELECT * FROM users WHERE id='sales-a'");self.assertEqual(u['active'],0);self.assertEqual(u['name'],'Deleted user');self.assertEqual(u['password_hash'],'')
+    def test_account_erasure_keeps_shared_waba_until_last_phone_is_deleted(self):
+        first=self.account('whatsapp');second=uid()
+        with transaction() as db:
+            db.execute("INSERT INTO service_accounts(id,tenant_id,channel,provider_id,label,api_version,state,created_at) VALUES(?,'a','whatsapp','901','Second','v26.0','verified',?)",(second,now()))
+            db.execute("INSERT INTO meta_business_accounts VALUES('waba','a',?)",(now(),))
+            for aid in [first,second]:db.execute("INSERT INTO meta_connections(account_id,tenant_id,business_account_id,connected_at) VALUES(?,'a','waba',?)",(aid,now()))
+        self.login()
+        for index,aid in enumerate([first,second]):
+            r=self.client.post('/api/v2/privacy/deletions',json={'scope':'account','account_id':aid,'password':base.PASSWORD,'confirm':'DELETE'});self.assertEqual(r.status_code,202,r.text)
+            privacy.process_deletion();self.assertEqual(self.client.get('/api/privacy/deletions/'+r.json()['id']).json()['state'],'completed')
+            with transaction() as db:self.assertEqual(bool(one(db,"SELECT id FROM meta_business_accounts WHERE id='waba'")),index==0)
     def data_connect(self,kind='marketing'):
         self.login();state=self.client.post('/api/v2/meta/data/'+kind+'/start',json={}).json()['state']
         info={'is_valid':True,'app_id':'123','user_id':'700','scopes':sorted(meta_data.SPECS[kind]['scopes']),'expires_at':int(time.time())+3600}

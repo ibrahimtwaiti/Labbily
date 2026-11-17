@@ -27,7 +27,7 @@ def configuration():
     p=urlparse(origin)
     local=mode=='local' and os.getenv('WASLA_ENV')=='development' and not os.getenv('VERCEL_ENV') and p.hostname in {'localhost','127.0.0.1'}
     if mode not in {'smtp','local'} or (mode=='local' and not local):raise HTTPException(503,'email_provider_not_configured')
-    if not local and (p.scheme!='https' or not p.hostname or p.username or p.password or p.path or p.query or p.fragment):raise HTTPException(503,'email_https_origin_required')
+    if (p.scheme not in {'http','https'} or (not local and p.scheme!='https') or not p.hostname or p.username or p.password or p.path or p.query or p.fragment):raise HTTPException(503,'email_https_origin_required')
     if mode=='smtp' and not all(value(k) for k in ('WASLA_SMTP_HOST','WASLA_SMTP_FROM','WASLA_SMTP_USER','WASLA_SMTP_PASSWORD')):raise HTTPException(503,'email_provider_not_configured')
     cipher();return mode,origin
 

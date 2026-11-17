@@ -137,10 +137,16 @@ async def meta_delete(request:Request):
 
 def purge_accounts(db,accounts,data):
     identities=identifiers(db,'service_identities','account_id',accounts);tickets=identifiers(db,'service_tickets','identity_id',identities)
+    business_ids=identifiers(db,'meta_connections','account_id',accounts,field='business_account_id')
     messages=identifiers(db,'service_messages','account_id',accounts)
+    # Active holds were checked before this transaction; erase expired reasons as well.
+    remove(db,'retention_holds','entity_id',accounts+data+identities+tickets)
     for table,column,ids in [('service_outbox','message_id',messages),('service_media_jobs','account_id',accounts),('service_media','ticket_id',tickets),('service_redactions','ticket_id',tickets),('service_ratings','ticket_id',tickets),('service_consents','identity_id',identities),('service_identity_links','left_id',identities),('service_identity_links','right_id',identities),('service_messages','account_id',accounts),('service_tickets','id',tickets),('service_identities','account_id',accounts)]:remove(db,table,column,ids)
     for table in ['meta_page_posts','service_events','service_status_history','service_templates','service_secrets','service_oauth_states','service_channel_snapshots','meta_connections','meta_page_connections','meta_grants','meta_read_watermarks']:remove(db,table,'account_id',accounts)
     remove(db,'service_accounts','id',accounts)
+    for business_id in set(business_ids):
+        if not one(db,'SELECT account_id FROM meta_connections WHERE business_account_id=?',(business_id,)):
+            remove(db,'meta_business_accounts','id',[business_id])
     for table in ['meta_lead_events','meta_data_records']:remove(db,table,'connection_id',data)
     remove(db,'meta_data_connections','id',data)
 
@@ -149,6 +155,7 @@ def purge(db,job,targets):
     ids=targets['users'];tid=job['tenant_id']
     for table in ['email_jobs','email_verifications','service_registrations','sessions','notifications','meta_signup_sessions','meta_page_sessions','meta_data_sessions','service_oauth_states']:remove(db,table,'user_id',ids)
     if job['scope']=='user':
+        remove(db,'retention_holds','entity_id',ids)
         db.execute("UPDATE users SET email=?,name='Deleted user',password_hash='',active=0 WHERE id=?",('deleted-'+uid()+'@invalid.example',job['requester_id']))
         db.execute("UPDATE audit SET actor_id=NULL,detail='' WHERE actor_id=?",(job['requester_id'],));return
     if job['scope']!='tenant':return
