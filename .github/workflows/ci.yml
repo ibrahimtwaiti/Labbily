@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt
       - run: python -m compileall -q wasla scripts
       - run: node --check wasla/static/app.js
       - run: node --check wasla/static/service.js
@@ -54,7 +54,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt
       - name: Migrations, PostgreSQL acceptance, isolation and concurrent worker
         env:
           DATABASE_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
@@ -113,7 +113,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt
       - run: npm ci
       - run: node scripts/i18n/check.cjs
       - run: node --test tests/test_worker_trigger.cjs
