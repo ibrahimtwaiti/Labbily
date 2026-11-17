@@ -46,15 +46,20 @@ class SaaS(unittest.TestCase):
     def test_signup_disabled_then_reviewed_and_no_takeover(self):
         data={'company':'Example','name':'Owner','email':'new@example.test','password':'new-password-123456','terms_version':'sandbox-v1'}
         self.assertEqual(self.client.post('/api/auth/register',json=data).status_code,409)
-        os.environ['WASLA_SELF_SIGNUP_MODE']='test'
+        from cryptography.fernet import Fernet
+        from wasla.service_oauth import cipher
+        os.environ.update(WASLA_SELF_SIGNUP_MODE='test',WASLA_EMAIL_MODE='local',WASLA_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode())
+        plan=self.plan()
         for _ in range(2):self.assertEqual(self.client.post('/api/auth/register',json=data).status_code,202)
         with transaction() as db:
             u=one(db,'SELECT * FROM users WHERE email=?',(data['email'],));self.assertEqual(u['active'],0);tid=u['tenant_id']
             self.assertEqual(db.execute('SELECT count(*) FROM service_registrations').fetchone()[0],1)
-        plan=self.plan()
         path='/api/admin/commerce/registrations/'+tid+'/approve'
         self.assertEqual(self.client.post(path,json={'evidence':'Verified email ownership by test support'}).status_code,409)
         self.assign(plan,tenant=tid)
+        with transaction() as db:job=one(db,'SELECT ciphertext FROM email_jobs WHERE user_id=?',(u['id'],))
+        token=json.loads(cipher().decrypt(job['ciphertext'].encode()))['url'].split('#')[1]
+        self.assertEqual(self.client.post('/api/auth/verification/complete',json={'token':token}).status_code,200)
         self.assertEqual(self.client.post(path,json={'evidence':'Verified email ownership by test support'}).status_code,200)
         with transaction() as db:self.assertEqual(one(db,'SELECT active FROM users WHERE email=?',(data['email'],))['active'],1)
 

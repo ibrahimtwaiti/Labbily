@@ -50,6 +50,8 @@ def provider_request(account, method, suffix='', payload=None):
     if not credential: raise HTTPException(409, 'channel_credentials_missing')
     host = 'graph.facebook.com' if account['channel'] in {'whatsapp','messenger'} else 'graph.instagram.com'
     url = f"https://{host}/{account['api_version']}/{account['provider_id']}{suffix}"
+    from .entitlements import consume_api
+    with transaction() as db:consume_api(db,account['tenant_id'])
     start=time.monotonic();status=0;error=''
     try:
         response=httpx.request(method, url, headers={'Authorization': 'Bearer '+credential}, json=payload,
@@ -62,7 +64,7 @@ def provider_request(account, method, suffix='', payload=None):
         raise
     finally:
         with transaction() as db:
-            db.execute('INSERT INTO meta_api_usage VALUES(?,?,?,?,?,?,?)',(uid(),account['tenant_id'],account['channel']+':'+method+(':messages' if suffix=='/messages' else ':asset'),status,error,int((time.monotonic()-start)*1000),int(time.time())))
+            if one(db,'SELECT id FROM tenants WHERE id=?',(account['tenant_id'],)):db.execute('INSERT INTO meta_api_usage VALUES(?,?,?,?,?,?,?)',(uid(),account['tenant_id'],account['channel']+':'+method+(':messages' if suffix=='/messages' else ':asset'),status,error,int((time.monotonic()-start)*1000),int(time.time())))
 
 def normalize(channel, payload):
     """Yield (asset id, semantic key, normalized event); never trust a supplied tenant."""
@@ -87,6 +89,11 @@ def normalize(channel, payload):
                     for mid in item.get('delivery',{}).get('mids',[]):
                         stamp=int(item.get('timestamp',0))//1000
                         yield asset,'delivered:'+str(mid),{'type':'status','id':str(mid),'status':'delivered','at':stamp}
+                if channel=='messenger' and 'read' in item:
+                    watermark=int(item['read']['watermark']);peer=str(item['sender']['id'])
+                    if watermark<0 or watermark>int(time.time()*1000)+300000 or not peer.isdigit():raise ValueError('invalid_read_receipt')
+                    key='read:'+peer+':'+str(watermark)
+                    yield asset,key,{'type':'read','id':key,'user':peer,'watermark':watermark}
                 msg=item.get('message')
                 if not msg: continue
                 mid=str(msg['mid']); echo=bool(msg.get('is_echo'))
@@ -136,6 +143,9 @@ def process_event():
             if not a: raise ValueError('account_unavailable')
             aid=a['id']; tid=a['tenant_id']; clock=int(time.time())
             if e['type']=='status': apply_status(db,aid,e['id'],e['status'],e['at'])
+            elif e['type']=='read':
+                from .messenger_metrics import apply_watermark
+                apply_watermark(db,aid,e['user'],e['watermark'])
             elif e['direction']=='out':
                 # Echoes confirm an existing send only; never create a customer or a ticket.
                 apply_status(db,aid,e['id'],'sent',e['at'])
@@ -249,6 +259,7 @@ def send_outbox():
                     return True
 
         else: body={'recipient':{'id':identity['provider_user_id']},'message':{'text':m['body']}}
+        db.execute('UPDATE service_messages SET occurred_at=? WHERE id=?',(clock,m['id']))
         db.execute("UPDATE service_outbox SET state='sending',claimed_at=?,attempts=attempts+1 WHERE id=?",(clock,o['id']))
     state='unknown'; error='dispatch_outcome_unknown'; pid=None; retry=0; reauth=False
     try:
@@ -271,12 +282,17 @@ def send_outbox():
     with transaction() as db:
         db.execute('UPDATE service_outbox SET state=?,error=?,next_attempt=? WHERE id=?',(state,error,int(time.time())+retry+random.randint(0,5),o['id']))
         db.execute('UPDATE service_messages SET status=?,provider_id=? WHERE id=?',(state,pid,m['id']))
-        if reauth: db.execute("UPDATE service_accounts SET state='reauthorize' WHERE id=?",(a['id'],))
+        if reauth: db.execute("UPDATE service_accounts SET state='reauthorize' WHERE id=? AND state!='disconnected'",(a['id'],))
         if pid:
             db.execute('UPDATE service_accounts SET last_outbound_at=? WHERE id=?',(now(),a['id']))
             db.execute('UPDATE service_tickets SET first_human_at=COALESCE(first_human_at,?) WHERE id=?',(int(time.time()),t['id']))
             for event in rows(db,'SELECT * FROM service_status_history WHERE account_id=? AND provider_id=? ORDER BY occurred_at',(a['id'],pid)):
                 apply_status(db,a['id'],pid,event['status'],event['occurred_at'])
+            if a['channel']=='messenger':
+                stamp=one(db,'SELECT watermark_ms FROM meta_read_watermarks WHERE account_id=? AND peer_id=?',(a['id'],identity['provider_user_id']))
+                if stamp:
+                    from .messenger_metrics import apply_watermark
+                    apply_watermark(db,a['id'],identity['provider_user_id'],stamp['watermark_ms'])
     return True
 
 def drain(max_events=20, max_seconds=18):

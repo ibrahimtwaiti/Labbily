@@ -9,12 +9,20 @@ from .security import permit, limit, digest, hash_password
 from .runtime_configuration import value
 from .service_api import router
 
+class Limits(BaseModel):
+    model_config=ConfigDict(extra="forbid",strict=True)
+    seats:int=Field(default=25,ge=1,le=10000)
+    channels:int=Field(default=10,ge=0,le=10000)
+    meta_accounts:int=Field(default=10,ge=0,le=10000)
+    api_requests:int=Field(default=10000,ge=0,le=100000000)
+
 class Plan(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
     name:str=Field(min_length=2,max_length=100)
     currency:str=Field(pattern=r'^[A-Z]{3}$')
     monthly_amount_minor:int=Field(ge=0,le=100000000)
     message_limit:int=Field(ge=0,le=10000000)
+    limits:Limits=Field(default_factory=Limits)
 
 class Subscription(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -28,6 +36,7 @@ class Registration(BaseModel):
     email:str=Field(max_length=254)
     password:SecretStr
     terms_version:str=Field(pattern=r'^sandbox-v1$')
+    plan_id:str=Field(default='',max_length=80)
 
 def period():return datetime.now(timezone.utc).strftime('%Y-%m')
 
@@ -49,7 +58,7 @@ def consume_message(db,tid):
 @router.get('/api/admin/commerce')
 def administration(u=Depends(user)):
     provider(u)
-    with transaction() as db:return {'mode':'sandbox','plans':rows(db,'SELECT * FROM service_plans ORDER BY created_at'),
+    with transaction() as db:return {'mode':'sandbox','plans':plan_list(db,True),
         'subscriptions':rows(db,'SELECT s.*,t.name FROM service_subscriptions s JOIN tenants t ON t.id=s.tenant_id'),
         'registrations':rows(db,'SELECT r.*,t.name,u.email FROM service_registrations r JOIN tenants t ON t.id=r.tenant_id JOIN users u ON u.id=r.user_id')}
 
@@ -58,6 +67,7 @@ def create_plan(data:Plan,u=Depends(user)):
     provider(u);ident=uid()
     with transaction() as db:
         db.execute('INSERT INTO service_plans VALUES(?,?,?,?,?,1,?)',(ident,data.name,data.currency,data.monthly_amount_minor,data.message_limit,now()))
+        db.execute('INSERT INTO service_plan_limits VALUES(?,?)',(ident,json.dumps(data.limits.model_dump())))
         audit(db,u,'commerce.plan.created',ident,'sandbox')
     return {'id':ident,'mode':'sandbox'}
 
@@ -68,6 +78,10 @@ def assign(tenant_id:str,data:Subscription,u=Depends(user)):
         lock_tenant(db,tenant_id)
         plan=one(db,'SELECT * FROM service_plans WHERE id=? AND active=1',(data.plan_id,))
         if not plan:raise HTTPException(404,'plan_not_found')
+        limit_row=one(db,'SELECT limits_json FROM service_plan_limits WHERE plan_id=?',(data.plan_id,))
+        from .entitlements import DEFAULT,counts
+        plan['limits']=json.loads(limit_row['limits_json']) if limit_row else DEFAULT
+        if any(n>plan['limits'][k] for k,n in counts(db,tenant_id).items()):raise HTTPException(409,'plan_below_current_usage')
         db.execute('INSERT INTO service_subscriptions VALUES(?,?,?,?,?) ON CONFLICT(tenant_id) DO UPDATE SET plan_id=excluded.plan_id,snapshot=excluded.snapshot,status=excluded.status,updated_at=excluded.updated_at',(tenant_id,data.plan_id,json.dumps(plan),data.status,now()))
         audit(db,u,'commerce.subscription.assigned',tenant_id,data.status)
     return {'mode':'sandbox','status':data.status}
@@ -80,7 +94,9 @@ def billing(u=Depends(user)):
         if sub:sub['snapshot']=json.loads(sub['snapshot'])
         invoices=rows(db,'SELECT * FROM service_sandbox_invoices WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100',(u['tenant_id'],))
         for invoice in invoices:invoice['snapshot']=json.loads(invoice['snapshot'])
-        return {'mode':'sandbox','payment_collection_enabled':False,'meta_charges_included':False,'subscription':sub,'period':period(),
+        from .entitlements import DEFAULT,counts
+        limits={**DEFAULT,**(sub['snapshot'].get('limits',{}) if sub else {})}
+        return {'limits':limits,'counts':counts(db,u['tenant_id']),'mode':'sandbox','payment_collection_enabled':False,'meta_charges_included':False,'subscription':sub,'period':period(),
             'usage':rows(db,'SELECT metric,used FROM service_usage_counters WHERE tenant_id=? AND period=?',(u['tenant_id'],period())),'invoices':invoices}
 
 @router.post('/api/v2/billing/invoice')
@@ -101,17 +117,26 @@ def invoice(u=Depends(user)):
 def register(data:Registration,request:Request):
     if value('WASLA_SELF_SIGNUP_MODE','disabled')!='test':raise HTTPException(409,'self_signup_not_enabled')
     with transaction() as db:limit(db,'signup:'+digest(request.client.host),5,3600)
+    from .email_verification import configuration,enqueue
+    configuration()
     address=email(data.email);hashed=hash_password(data.password.get_secret_value());tid=uid();ident=uid()
     with transaction() as db:
+        plan=one(db,'SELECT * FROM service_plans WHERE id=? AND active=1',(data.plan_id,)) if data.plan_id else one(db,'SELECT * FROM service_plans WHERE active=1 ORDER BY created_at LIMIT 1')
+        if not plan:raise HTTPException(409,'no_signup_plan_available')
+        limitrow=one(db,'SELECT limits_json FROM service_plan_limits WHERE plan_id=?',(plan['id'],))
+        from .entitlements import DEFAULT
+        plan['limits']=json.loads(limitrow['limits_json']) if limitrow else DEFAULT
         # Uniform result for existing addresses, no password reset or account takeover.
         if not one(db,'SELECT id FROM users WHERE email=?',(address,)):
             db.execute("INSERT INTO tenants(id,name,status,created_at) VALUES(?,?,'setup',?)",(tid,data.company,now()))
             inserted=db.execute("INSERT INTO users VALUES(?,?,?,?,?,'admin',0,?) ON CONFLICT(email) DO NOTHING",(ident,tid,address,data.name,hashed,now())).rowcount
             if not inserted:
                 db.execute("DELETE FROM tenants WHERE id=?",(tid,))
-                return {"status":"pending_provider_review","mode":"sandbox"}
+                return {"status":"pending_email_verification","mode":"sandbox"}
             db.execute("INSERT INTO service_registrations VALUES(?,?,'pending','sandbox-v1','',?)",(tid,ident,now()))
-    return {'status':'pending_provider_review','mode':'sandbox'}
+            db.execute("INSERT INTO service_subscriptions VALUES(?,?,?,'trial',?)",(tid,plan['id'],json.dumps(plan),now()))
+            enqueue(db,ident)
+    return {'status':'pending_email_verification','mode':'sandbox'}
 
 @router.post('/api/admin/commerce/registrations/{tenant_id}/approve')
 def approve(tenant_id:str,data:dict,u=Depends(user)):
@@ -123,7 +148,41 @@ def approve(tenant_id:str,data:dict,u=Depends(user)):
         reg=one(db,'SELECT * FROM service_registrations WHERE tenant_id=?',(tenant_id,))
         if not reg:raise HTTPException(404,'registration_not_found')
         if not one(db,'SELECT tenant_id FROM service_subscriptions WHERE tenant_id=?',(tenant_id,)):raise HTTPException(409,'assign_sandbox_plan_first')
+        verified=one(db,'SELECT verified_at FROM email_verifications WHERE user_id=?',(reg['user_id'],))
+        if not verified or not verified['verified_at']:raise HTTPException(409,'email_verification_required')
+        from .entitlements import capacity
+        account=one(db,'SELECT active FROM users WHERE id=?',(reg['user_id'],))
+        if not account['active']:capacity(db,tenant_id,'seat')
         db.execute("UPDATE service_registrations SET status='approved',review_evidence=? WHERE tenant_id=?",(evidence,tenant_id))
         db.execute('UPDATE users SET active=1 WHERE id=?',(reg['user_id'],))
         audit(db,u,'commerce.registration.approved',tenant_id,'sandbox')
     return {'status':'approved','mode':'sandbox','production_enabled':False}
+
+
+@router.get('/api/public/plans')
+def public_plans():
+    with transaction() as db:return {'mode':'sandbox','signup_enabled':value('WASLA_SELF_SIGNUP_MODE')=='test','plans':plan_list(db)}
+
+@router.post('/api/v2/billing/plan')
+def choose_plan(data:Subscription,u=Depends(user)):
+    permit(u,'settings')
+    if data.status!='trial':raise HTTPException(422,'self_service_trial_only')
+    # Sandbox selection only, with the same backend capacity validation as provider assignment.
+    return assign(u['tenant_id'],data,{**u,'role':'provider'})
+
+
+def plan_list(db,all_plans=False):
+    from .entitlements import DEFAULT
+    plans=rows(db,'SELECT p.*,l.limits_json FROM service_plans p LEFT JOIN service_plan_limits l ON l.plan_id=p.id '+('' if all_plans else 'WHERE p.active=1 ')+'ORDER BY p.created_at')
+    for p in plans:p['limits']=json.loads(p.pop('limits_json') or json.dumps(DEFAULT))
+    return plans
+
+@router.patch('/api/admin/commerce/plans/{ident}')
+def plan_update(ident:str,data:Plan,u=Depends(user)):
+    provider(u)
+    with transaction() as db:
+        if not one(db,'SELECT id FROM service_plans WHERE id=?',(ident,)):raise HTTPException(404,'plan_not_found')
+        db.execute('UPDATE service_plans SET name=?,currency=?,monthly_amount_minor=?,message_limit=? WHERE id=?',(data.name,data.currency,data.monthly_amount_minor,data.message_limit,ident))
+        db.execute('INSERT INTO service_plan_limits VALUES(?,?) ON CONFLICT(plan_id) DO UPDATE SET limits_json=excluded.limits_json',(ident,json.dumps(data.limits.model_dump())))
+        audit(db,u,'commerce.plan.updated',ident,'existing_subscriptions_unchanged')
+    return {'mode':'sandbox','existing_subscriptions':'unchanged_until_reassigned'}

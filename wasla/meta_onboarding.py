@@ -76,6 +76,8 @@ def graph(tenant_id, version, operation, path, token='', method='GET', params=No
     """
     if version not in SUPPORTED_VERSIONS or not re.fullmatch(r'[A-Za-z0-9_/]+',path):
         raise HTTPException(422,'invalid_meta_request')
+    from .entitlements import consume_api
+    with transaction() as db:consume_api(db,tenant_id)
     start=time.monotonic();status=0;error='';result=None
     try:
         response=httpx.request(method,'https://graph.facebook.com/'+version+'/'+path,
@@ -88,7 +90,7 @@ def graph(tenant_id, version, operation, path, token='', method='GET', params=No
             error='meta_'+str(code) if type(code) is int else 'meta_request_failed'
     except (httpx.HTTPError,ValueError,TypeError,AttributeError): error='meta_transport_or_response_error'
     with transaction() as db:
-        db.execute('INSERT INTO meta_api_usage VALUES(?,?,?,?,?,?,?)',(uid(),tenant_id,operation,status,error,int((time.monotonic()-start)*1000),int(time.time())))
+        if one(db,'SELECT id FROM tenants WHERE id=?',(tenant_id,)):db.execute('INSERT INTO meta_api_usage VALUES(?,?,?,?,?,?,?)',(uid(),tenant_id,operation,status,error,int((time.monotonic()-start)*1000),int(time.time())))
     if error:
         raise HTTPException(429 if status==429 else 502, error)
     return result
@@ -128,7 +130,7 @@ def readiness(u=Depends(user)):
         'production_approved':False,'meta_approval_verified':False,'connections':connections,
         'services':[{'service':'whatsapp','implementation':'standard_cloud_api_test_candidate'},
                     {'service':'instagram','implementation':'existing_instagram_login_candidate'},
-                    {'service':'messenger','implementation':'text_messaging_test_candidate'},{'service':'pages','implementation':'page_selection_and_profile_test_candidate'},*[{'service':s,'implementation':'not_implemented'} for s in ['catalogs','lead_ads','marketing']]]}
+                    {'service':'messenger','implementation':'text_messaging_test_candidate'},{'service':'pages','implementation':'page_selection_and_profile_test_candidate'},*[{'service':s,'implementation':'read_only_oauth_sync_pending_live_verification'} for s in ['catalogs','lead_ads','marketing']]]}
 
 
 @router.post('/api/v2/meta/whatsapp/start',tags=['Meta integrations'])
@@ -184,6 +186,9 @@ def complete(data:CompleteSignup,request:Request,u=Depends(user)):
         # Serialize a tenant's onboarding and fail closed on suspended workspaces.
         t=one(db,'SELECT status FROM tenants WHERE id=?'+(' FOR UPDATE' if postgres() else ''),(tid,))
         if not t or t['status']=='suspended':raise HTTPException(403,'workspace_suspended')
+        from .entitlements import capacity
+        existing=one(db,"SELECT state FROM service_accounts WHERE channel='whatsapp' AND provider_id=?",(phone,))
+        if not existing or existing['state']=='disconnected':capacity(db,tid,'channel','whatsapp')
         db.execute('INSERT INTO meta_business_accounts VALUES(?,?,?) ON CONFLICT(id) DO NOTHING',(waba,tid,now()))
         if one(db,'SELECT tenant_id FROM meta_business_accounts WHERE id=?',(waba,))['tenant_id']!=tid:
             raise HTTPException(409,'meta_asset_unavailable')

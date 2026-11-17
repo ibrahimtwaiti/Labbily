@@ -11,7 +11,7 @@ from .main import user
 from .security import permit,digest
 from .runtime_configuration import value
 from .service_api import router,get
-from .service_oauth import cipher
+from .service_oauth import cipher,unseal
 from .meta_onboarding import graph,throttle,SUPPORTED_VERSIONS
 
 SCOPES={'pages_show_list','pages_read_engagement','pages_manage_metadata','pages_messaging'}
@@ -32,6 +32,8 @@ def config(u):
     cipher();return c
 
 def session(db,state,request,u,stage):
+    from .saas import lock_tenant
+    lock_tenant(db,u['tenant_id'])
     r=one(db,'SELECT * FROM meta_page_sessions WHERE state_hash=?'+(' FOR UPDATE' if postgres() else ''),(digest(state),))
     if not r or r['tenant_id']!=u['tenant_id'] or r['user_id']!=u['id'] or r['session_hash']!=digest(request.cookies.get('wasla_session','')) or r['expires_at']<=int(time.time()) or r['stage']!=stage:raise HTTPException(403,'invalid_facebook_session')
     if r['app_id']!=value('META_APP_ID') or r['config_id']!=value('META_FACEBOOK_CONFIG_ID') or r['api_version']!=value('META_GRAPH_VERSION'):raise HTTPException(409,'facebook_configuration_changed')
@@ -43,7 +45,7 @@ def listing(u=Depends(user)):
     try:config(u);available=True
     except HTTPException:available=False
     with transaction() as db:accounts=rows(db,"SELECT a.id,a.label,a.provider_id,a.state,a.expires_at,p.subscription_state FROM service_accounts a JOIN meta_page_connections p ON p.account_id=a.id WHERE a.tenant_id=?",(u['tenant_id'],))
-    return {'signup_available':available,'mode':'test','production_approved':False,'accounts':accounts,'supported':['page_profile','messenger_text','message_delivery_events'],'not_implemented':['page_publishing','message_read_watermarks','catalogs','lead_ads','marketing']}
+    return {'signup_available':available,'mode':'test','production_approved':False,'accounts':accounts,'supported':['page_profile','messenger_text','message_delivery_events','message_read_events'],'optional_permission_features':{'page_publishing':'pages_manage_posts'}}
 
 @router.post('/api/v2/meta/pages/start')
 def start(request:Request,u=Depends(user)):
@@ -77,9 +79,10 @@ def exchange(data:Exchange,request:Request,u=Depends(user)):
         result=graph(tid,version,'facebook_pages','me/accounts',token=credential,params=params)
         if not isinstance(result.get('data'),list):raise HTTPException(502,'facebook_invalid_page_response')
         for p in result['data']:
-            if isinstance(p,dict) and re.fullmatch(r'[0-9]{1,40}',str(p.get('id',''))) and isinstance(p.get('access_token'),str) and p['access_token'] and 'MESSAGING' in p.get('tasks',[]):pages.append({'id':str(p['id']),'name':str(p.get('name','Page'))[:120],'token':p['access_token'],'expires_at':expires})
+            if isinstance(p,dict) and re.fullmatch(r'[0-9]{1,40}',str(p.get('id',''))) and isinstance(p.get('access_token'),str) and p['access_token'] and 'MESSAGING' in p.get('tasks',[]):pages.append({'id':str(p['id']),'name':str(p.get('name','Page'))[:120],'token':p['access_token'],'expires_at':expires,'scopes':sorted({s for s in info['scopes'] if isinstance(s,str) and (s!='pages_manage_posts' or 'CREATE_CONTENT' in p.get('tasks',[]) or 'MANAGE' in p.get('tasks',[]))})})
         after=result.get('paging',{}).get('cursors',{}).get('after') if result.get('paging',{}).get('next') else None
         if not after:break
+    if after:raise HTTPException(409,'meta_discovery_too_large_narrow_grant')
     if not pages:raise HTTPException(409,'no_eligible_messaging_pages')
     with transaction() as db:
         session(db,data.state,request,u,'consumed')
@@ -90,18 +93,22 @@ def exchange(data:Exchange,request:Request,u=Depends(user)):
 def connect(data:SelectPage,request:Request,u=Depends(user)):
     c=config(u);throttle(u['tenant_id']);tid=u['tenant_id']
     with transaction() as db:
-        r=session(db,data.state,request,u,'select');pages=json.loads(cipher().decrypt(r['ciphertext'].encode()))
+        r=session(db,data.state,request,u,'select');pages=json.loads(unseal(r['ciphertext']))
         selected=next((p for p in pages if p['id']==data.page_id),None)
         if not selected:raise HTTPException(403,'page_not_granted')
         tidrow=one(db,'SELECT status FROM tenants WHERE id=?'+(' FOR UPDATE' if postgres() else ''),(tid,))
         if tidrow['status']=='suspended':raise HTTPException(403,'workspace_suspended')
+        from .entitlements import capacity,page_ownership
+        page_ownership(db,tid,selected['id'])
+        existing=one(db,"SELECT state FROM service_accounts WHERE channel='messenger' AND provider_id=?",(selected['id'],))
+        if not existing or existing['state']=='disconnected':capacity(db,tid,'channel','messenger')
         aid=uid()
         db.execute("INSERT INTO service_accounts(id,tenant_id,channel,provider_id,label,api_version,state,created_at) VALUES(?,?,'messenger',?,?,?,'unverified',?) ON CONFLICT(channel,provider_id) DO NOTHING",(aid,tid,selected['id'],selected['name'],c['META_GRAPH_VERSION'],now()))
         a=one(db,"SELECT * FROM service_accounts WHERE channel='messenger' AND provider_id=?"+(' FOR UPDATE' if postgres() else ''),(selected['id'],))
         if a['tenant_id']!=tid:raise HTTPException(409,'meta_asset_unavailable')
         aid=a['id'];clock=int(time.time())
         db.execute('INSERT INTO service_secrets VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET ciphertext=excluded.ciphertext,issued_at=excluded.issued_at',(aid,cipher().encrypt(selected['token'].encode()).decode(),clock))
-        db.execute("UPDATE service_accounts SET token_ref=?,state='unverified',scopes=?,expires_at=?,api_version=? WHERE id=?",('vault:'+aid,json.dumps(sorted(SCOPES)),selected['expires_at'],c['META_GRAPH_VERSION'],aid))
+        db.execute("UPDATE service_accounts SET token_ref=?,state='unverified',scopes=?,expires_at=?,api_version=? WHERE id=?",('vault:'+aid,json.dumps(selected.get('scopes',sorted(SCOPES))),selected['expires_at'],c['META_GRAPH_VERSION'],aid))
         db.execute("INSERT INTO meta_grants VALUES(?,?,?,?,?,'valid') ON CONFLICT(account_id) DO UPDATE SET app_id=excluded.app_id,subject_hash=excluded.subject_hash,checked_at=excluded.checked_at,health=excluded.health",(aid,tid,c['META_APP_ID'],r['subject_hash'],clock))
         db.execute("INSERT INTO meta_page_connections VALUES(?,?,'pending',?) ON CONFLICT(account_id) DO UPDATE SET subscription_state='pending',connected_at=excluded.connected_at",(aid,tid,now()))
         db.execute("UPDATE meta_page_sessions SET stage='connected',ciphertext='' WHERE state_hash=?",(digest(data.state),))
@@ -117,7 +124,7 @@ def subscribe(ident:str,u=Depends(user)):
         if a['channel']!='messenger' or a['state']=='disconnected':raise HTTPException(409,'page_connection_required')
     credential=token(a)
     if not credential:raise HTTPException(409,'page_token_required')
-    result=graph(u['tenant_id'],a['api_version'],'page_subscribe',a['provider_id']+'/subscribed_apps',token=credential,method='POST',payload={'subscribed_fields':['messages','message_deliveries']})
+    result=subscribe_fields(a['tenant_id'],a['api_version'],a['provider_id'],credential,{'messages','message_deliveries','message_reads'})
     if result.get('success') is not True:raise HTTPException(502,'page_subscription_not_confirmed')
     with transaction() as db:
         from .meta_onboarding import ensure_credential
@@ -150,7 +157,14 @@ def disconnect_remote(ident:str,u=Depends(user)):
     credential=token(a);remote='not_confirmed'
     if credential:
         try:
-            result=graph(u['tenant_id'],a['api_version'],'page_unsubscribe',a['provider_id']+'/subscribed_apps',token=credential,method='DELETE')
+            with transaction() as db:shared=one(db,"SELECT id FROM meta_data_connections WHERE kind='leads' AND provider_id=? AND state='connected'",(a['provider_id'],))
+            if shared:
+                current=graph(u['tenant_id'],a['api_version'],'page_subscription_read',a['provider_id']+'/subscribed_apps',token=credential)
+                fields={'leadgen'}
+                for app in current.get('data',[]):
+                    if str(app.get('id'))==value('META_APP_ID'):fields.update(x for x in app.get('subscribed_fields',[]) if isinstance(x,str) and x not in {'messages','message_deliveries','message_reads'})
+                result=graph(u['tenant_id'],a['api_version'],'page_unsubscribe_messaging',a['provider_id']+'/subscribed_apps',token=credential,method='POST',payload={'subscribed_fields':sorted(fields)})
+            else:result=graph(u['tenant_id'],a['api_version'],'page_unsubscribe',a['provider_id']+'/subscribed_apps',token=credential,method='DELETE')
             if result.get('success') is True:remote='confirmed'
         except HTTPException:pass # Still erase local credentials on provider failure.
     with transaction() as db:
@@ -159,3 +173,12 @@ def disconnect_remote(ident:str,u=Depends(user)):
         disconnect_local(db,ident,'owner_disconnect')
         audit(db,u,'meta.page.disconnected',ident,'remote_unsubscribe_'+remote)
     return {'local':'disconnected','remote_unsubscribe':remote,'user_permissions_revoked':False}
+
+
+def subscribe_fields(tid,version,page_id,token,requested):
+    current=graph(tid,version,'page_subscription_read',page_id+'/subscribed_apps',token=token)
+    fields=set(requested)
+    for app in current.get('data',[]):
+        if str(app.get('id'))==value('META_APP_ID'):
+            fields.update(x for x in app.get('subscribed_fields',[]) if isinstance(x,str))
+    return graph(tid,version,'page_subscribe',page_id+'/subscribed_apps',token=token,method='POST',payload={'subscribed_fields':sorted(fields)})

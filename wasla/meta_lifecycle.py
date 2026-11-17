@@ -20,9 +20,10 @@ def disconnect_local(db, ident, reason):
     db.execute("UPDATE meta_connections SET subscription_state='disconnected',registration_state='pending' WHERE account_id=?",(ident,))
     db.execute("UPDATE meta_grants SET health='revoked',checked_at=? WHERE account_id=?",(int(time.time()),ident))
     db.execute("UPDATE meta_page_connections SET subscription_state='disconnected' WHERE account_id=?",(ident,))
+    db.execute("UPDATE meta_page_posts SET state='blocked',error=? WHERE account_id=? AND state IN ('queued','retry')",(reason,ident))
     db.execute('DELETE FROM service_secrets WHERE account_id=?',(ident,))
     db.execute('DELETE FROM service_oauth_states WHERE account_id=?',(ident,))
-    db.execute("UPDATE service_outbox SET state='blocked',error=? WHERE state='queued' AND message_id IN (SELECT id FROM service_messages WHERE account_id=?)",(reason,ident))
+    db.execute("UPDATE service_outbox SET state='blocked',error=? WHERE state IN ('queued','retry') AND message_id IN (SELECT id FROM service_messages WHERE account_id=?)",(reason,ident))
     db.execute("UPDATE service_messages SET status='blocked' WHERE account_id=? AND id IN (SELECT message_id FROM service_outbox WHERE state='blocked' AND error=?)",(ident,reason))
 
 
@@ -59,8 +60,8 @@ def token_health(ident:str,u=Depends(user)):
     return {'health':health,'expires_at':expires,'refresh_supported':False,'next_action':'none' if health=='valid' else 'embedded_signup'}
 
 
-def verify_signed_request(raw):
-    secret=value('META_APP_SECRET')
+def verify_signed_request(raw,secret_key='META_APP_SECRET'):
+    secret=value(secret_key)
     if not secret:raise HTTPException(503,'meta_callback_not_configured')
     try:
         signature,encoded=raw.split('.')
@@ -77,6 +78,7 @@ def verify_signed_request(raw):
     except (ValueError,TypeError,UnicodeError,AttributeError):raise HTTPException(403,'invalid_meta_signed_request')
 
 
+@router.post('/api/webhooks/instagram/deauthorize',tags=['Meta lifecycle callbacks'])
 @router.post('/api/webhooks/meta/deauthorize',tags=['Meta lifecycle callbacks'])
 async def deauthorize(request:Request):
     if request.headers.get('content-type','').split(';')[0]!='application/x-www-form-urlencoded':raise HTTPException(415,'form_required')
@@ -85,10 +87,11 @@ async def deauthorize(request:Request):
     try:
         values=parse_qs(body.decode('ascii'),strict_parsing=True)
         if len(values.get('signed_request',[]))!=1:raise ValueError()
-        subject,event=verify_signed_request(values['signed_request'][0])
+        subject,event=verify_signed_request(values['signed_request'][0],'INSTAGRAM_APP_SECRET' if '/instagram/' in request.url.path else 'META_APP_SECRET')
     except (ValueError,UnicodeError):raise HTTPException(400,'invalid_callback_form')
-    app_id=value('META_APP_ID')
+    app_id=value('INSTAGRAM_APP_ID' if '/instagram/' in request.url.path else 'META_APP_ID')
     if not app_id:raise HTTPException(503,'meta_callback_not_configured')
+    event=digest(app_id+':'+event)
     with transaction() as db:
         if db.execute("INSERT INTO meta_callback_receipts VALUES(?,'deauthorize',?) ON CONFLICT(event_hash) DO NOTHING",(event,int(time.time()))).rowcount:
             accounts=rows(db,'SELECT account_id FROM meta_grants WHERE app_id=? AND subject_hash=?',(app_id,digest(subject)))
@@ -97,4 +100,5 @@ async def deauthorize(request:Request):
                 one(db,'SELECT id FROM service_accounts WHERE id=?'+(' FOR UPDATE' if postgres() else ''),(a['account_id'],))
                 grant=one(db,'SELECT * FROM meta_grants WHERE account_id=?',(a['account_id'],))
                 if grant['app_id']==app_id and grant['subject_hash']==digest(subject):disconnect_local(db,a['account_id'],'meta_deauthorized')
+            db.execute("UPDATE meta_data_connections SET ciphertext='',state='disconnected' WHERE app_id=? AND subject_hash=?",(app_id,digest(subject)))
     return {'ok':True}

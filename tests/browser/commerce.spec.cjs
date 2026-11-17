@@ -7,8 +7,8 @@ test('sandbox plans are backed by API and never collect payments',async({page})=
  await page.locator('#assign-plan').click();await page.locator('[name=tenant_id]').selectOption('ui-service');await page.locator('dialog button[type=submit]').click();await expect(page.locator('dialog')).not.toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
-test('signup explains review and remains closed by default',async({page})=>{
- await page.goto('/signup?lang=en');await expect(page.locator('h1')).toHaveText('Request a sandbox workspace');
- await page.locator('[name=company]').fill('Example Company');await page.locator('[name=name]').fill('Test Owner');await page.locator('[name=email]').fill('signup@example.test');await page.locator('[name=password]').fill('browser-sandbox-password');await page.locator('[name=terms]').check();await page.locator('button[type=submit]').click();await expect(page.locator('form .error')).toContainText('self_signup_not_enabled');
+test('signup clearly explains the closed external gate',async({page})=>{
+ await page.goto('/signup?lang=en');await expect(page.locator('h1')).toHaveText('Create a sandbox workspace');
+ await expect(page.locator('button[type=submit]')).toBeDisabled();await expect(page.locator('.notice')).toContainText('currently closed');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

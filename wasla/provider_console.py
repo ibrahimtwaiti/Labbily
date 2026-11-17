@@ -12,7 +12,10 @@ from .service_oauth import cipher
 from .runtime_configuration import value
 
 FIELDS={
+ **{k:(label,kind) for k,label,kind in [("WASLA_EMAIL_MODE","Email transport: disabled, smtp or local (development)","text"),("WASLA_EMAIL_ORIGIN","Email verification HTTPS origin","url"),("WASLA_SMTP_HOST","SMTP hostname","text"),("WASLA_SMTP_PORT","SMTP port","text"),("WASLA_SMTP_FROM","Sender address","text"),("WASLA_SMTP_USER","SMTP user","text"),("WASLA_SMTP_PASSWORD","SMTP password","secret")]},
  'WASLA_SELF_SIGNUP_MODE':('Self signup: disabled or test','text'),
+ **{k:(k,'text') for k in ['META_CATALOG_CONFIG_ID','META_LEADS_CONFIG_ID','META_MARKETING_CONFIG_ID']},
+ 'META_MARKETING_API_VERSION':('Marketing API version (independent lifecycle)','text'),
  'META_FACEBOOK_CONFIG_ID':('Facebook Login for Business configuration ID','text'),
  'META_APP_ID':('Meta app ID','text'),
  'META_SIGNUP_CONFIG_ID':('Embedded Signup configuration ID','text'),
@@ -68,9 +71,12 @@ def configure(data:dict,u=Depends(user)):
     for k,v in fields.items():
         if not isinstance(v,str) or len(v)>8192:raise HTTPException(422,'invalid_configuration_value')
         if not v:continue # Empty fields preserve current values.
+        if k=='WASLA_EMAIL_MODE' and v not in {'disabled','smtp','local'}:raise HTTPException(422,'invalid_email_mode')
+        if k=='WASLA_SMTP_PORT' and (not v.isdigit() or not 1<=int(v)<=65535):raise HTTPException(422,'invalid_smtp_port')
         if k in {'META_SIGNUP_MODE','WASLA_SELF_SIGNUP_MODE'} and v not in {'disabled','test'}:raise HTTPException(422,'test_mode_only_until_launch_review')
+        if k=='META_MARKETING_API_VERSION' and v!='v25.0':raise HTTPException(422,'marketing_version_review_required')
         if k=='META_GRAPH_VERSION' and v not in {'v25.0','v26.0'}:raise HTTPException(422,'review_supported_graph_version')
-        if k in {'META_APP_ID','META_SIGNUP_CONFIG_ID','META_FACEBOOK_CONFIG_ID'} and not re.fullmatch(r'[0-9]{1,40}',v):raise HTTPException(422,'numeric_meta_id_required')
+        if k in {'META_APP_ID','META_SIGNUP_CONFIG_ID','META_FACEBOOK_CONFIG_ID','META_CATALOG_CONFIG_ID','META_LEADS_CONFIG_ID','META_MARKETING_CONFIG_ID'} and not re.fullmatch(r'[0-9]{1,40}',v):raise HTTPException(422,'numeric_meta_id_required')
         if FIELDS[k][1]=='url':
             parsed=urlparse(v)
             if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:raise HTTPException(422,'https_url_required')
@@ -96,7 +102,11 @@ def edit(tenant_id:str,ident:str,data:dict,u=Depends(user)):
     credential=text(data,'access_token',0,8192)
     encrypted=cipher().encrypt(credential.encode()).decode() if credential else None
     with transaction() as db:
+        from .entitlements import capacity
+        from .saas import lock_tenant
+        lock_tenant(db,tenant_id)
         a=get(db,'service_accounts',ident,delegate,True)
+        if a['state']=='disconnected' and (encrypted or version!=a['api_version']):capacity(db,tenant_id,'channel',a['channel'])
         db.execute('UPDATE service_accounts SET label=?,api_version=? WHERE id=?',(label,version,ident))
         if encrypted:
             db.execute('INSERT INTO service_secrets VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET ciphertext=excluded.ciphertext,issued_at=excluded.issued_at',(ident,encrypted,int(time.time())))

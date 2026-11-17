@@ -49,6 +49,11 @@ def create_account(data:dict,u=Depends(user)):
     if not re.fullmatch(r'[A-Za-z0-9_-]+',pid) or not re.fullmatch(r'v\d+\.\d+',api_version): raise HTTPException(422,'invalid_provider_id_or_version')
     aid=uid(); label=text(data,'label',1,120)
     with transaction() as db:
+        from .entitlements import capacity
+        capacity(db,u['tenant_id'],'channel',channel)
+        if channel=='messenger':
+            from .entitlements import page_ownership
+            page_ownership(db,u['tenant_id'],pid)
         db.execute('INSERT INTO service_accounts(id,tenant_id,channel,provider_id,label,api_version,state,created_at) VALUES(?,?,?,?,?,?,?,?)',
             (aid,u['tenant_id'],channel,pid,label,api_version,'awaiting_approval' if channel=='tiktok' else 'referral_only' if channel=='snapchat' else 'unverified',now()))
         audit(db,u,'service.account.created',aid,channel)
@@ -94,7 +99,12 @@ async def receive(channel:str,request:Request):
     if not secret: raise HTTPException(503,'app_secret_missing')
     raw=await request.body()
     if not s.valid_signature(raw,request.headers.get('X-Hub-Signature-256',''),secret): raise HTTPException(401,'invalid_signature')
-    try: count=s.persist_events(channel,json.loads(raw))
+    try:
+        payload=json.loads(raw)
+        if channel=='messenger':
+            from .meta_data import ingest_leads
+            ingest_leads(payload)
+        count=s.persist_events(channel,payload)
     except (ValueError,KeyError,TypeError,AttributeError): raise HTTPException(400,'invalid_payload')
     return {'received':True,'events':count}
 

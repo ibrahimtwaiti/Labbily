@@ -1,3 +1,5 @@
+> تحديث الإكمال 18 نوفمبر 2026: انظر [التدقيق الحالي](../../DEVELOPMENT_COMPLETION_AUDIT.md) و[الصلاحيات ومسارات الخدمات الجديدة](COMPLETION_OPERATIONS_AR.md). لا شراكة أو موافقات رسمية مثبتة.
+
 # جاهزية Meta ومتطلبات تدخل المالك
 
 آخر تحقق وثائقي: 18 نوفمبر 2026. الحساب المطور منشأ بحسب المالك؛ لا يوجد في هذا التسليم دليل على اكتمال تحقق النشاط أو App Review أو صفة شراكة.
@@ -29,7 +31,7 @@
 | App Domains وSDK domains | غير معروفة | إضافة نطاق HTTPS النهائي ونطاق اختبار معزول |
 | Redirect URLs | لا عنوان إنتاج معتمد لهذه الإضافة | مطابقة origin وعناوين العودة الفعلية مع إعدادات التطبيق |
 | Privacy / Terms | صفحات أولية موجودة بالمشروع | استكمال الهوية القانونية والسياسات والمراجعة النظامية وتثبيت URLs عامة |
-| Data deletion | المحو الشامل غير مكتمل | اعتماد الإجراء ونطاق الحذف ومدته وتنفيذ callback/صفحة الحالة قبل الإطلاق |
+| Data deletion | محرك الحذف وcallbacks وصفحة الحالة منفذة؛ الاختبار الحي معلق | اعتماد الإجراء ونطاق الحذف ومدته وتنفيذ callback/صفحة الحالة قبل الإطلاق |
 | App Review / Advanced Access | لا دليل | طلب الصلاحيات المستخدمة وإرفاق الأدلة |
 | Webhook fields | استقبال messages/status موجود | ضبط callback وverify token واشتراك الحقول بما فيها دورة حياة الحساب |
 | Live mode | لم يُفعّل | الانتقال بعد الموافقات واختبارات القبول فقط |
@@ -47,11 +49,11 @@
 | WhatsApp Cloud API | رسائل، قوالب، أرقام وWebhooks | whatsapp_business_messaging، whatsapp_business_management؛ business_management فقط إذا احتاجت عملية محددة موثقة | حساب أعمال/مراسلة ورقم مؤهل؛ مراجعة ووصول مناسب لأصول الآخرين | موافقات مراسلة، نافذة الخدمة، قوالب معتمدة، حدود الحساب وطريقة دفع Meta | V2 + onboarding جديد مختبران اصطناعيًا؛ يلزم حساب وتفويض واختبار حي |
 | Instagram API with Instagram Login | معلومات احترافية ورسائل مدعومة | instagram_business_basic، instagram_business_manage_messages | حساب احترافي مؤهل ومراجعة الصلاحيات | ليس Facebook Login؛ لا تُخلط scopes المسارين؛ لا نفترض كل أنواع الوسائط | موصل V2 موجود؛ يحتاج موافقات وحساب اختبار |
 | Messenger Platform | محادثات صفحة وإرسال/استقبال | pages_messaging؛ pages_manage_metadata للاشتراك؛ pages_read_engagement للعمليات التي تتطلبها؛ pages_show_list لاختيار الصفحات | صفحة ومستخدم ذو مهمة مناسبة، Page token وApp Review | سياسات ونوافذ المنتج وموافقة عمليات التسويق مستقلة | منفذ تجريبيًا للنصوص والاستقبال والتسليم؛ يلزم إعداد الصفحة والمراجعة واختبار حي |
-| Pages API | اختيار صفحة وقراءة بياناتها | pages_show_list، pages_read_engagement؛ scopes إضافية فقط للوظائف المختارة | Page access token ومهام الصفحة والوصول الملائم | إدارة المنشورات تحتاج مراجعة منفصلة؛ لا وصول تلقائي لبيانات عامة | اختيار الصفحة وقراءة الملف والاشتراك والفصل منفذة تجريبيًا؛ نشر المحتوى غير منفذ |
+| Pages API | اختيار صفحة وقراءة بياناتها | pages_show_list، pages_read_engagement؛ scopes إضافية فقط للوظائف المختارة | Page access token ومهام الصفحة والوصول الملائم | إدارة المنشورات تحتاج مراجعة منفصلة؛ لا وصول تلقائي لبيانات عامة | اختيار الصفحة وقراءة الملف والاشتراك والفصل منفذة تجريبيًا؛ نشر النصوص منفذ بصلاحية إضافية، وينتظر اختبارًا حيًا |
 | Business Management API | إدارة الأصول | business_management وصلاحيات الأصل/العملية عند الحاجة | Business Portfolio وأدوار الأصول المناسبة | لا يخول تلقائيًا كل بيانات العملاء | دراسة فقط؛ تحديد الأصول المأذونة |
-| Catalog API | استعراض/إدارة كتالوج | catalog_management بحسب العملية | كتالوج مملوك/مشارك وصلاحيات ومراجعة مناسبة | نشاط التجارة وسياسات المنتج؛ لا نفترض إدارة الطلبات | دراسة فقط؛ تحديد كتالوج ونطاق الاستخدام |
-| Lead Ads | استقبال واسترجاع leads | leads_retrieval، وأذونات الصفحة/الاشتراك المطلوبة للمسار | صلاحية leads وأصول العميل ومراجعة | بيانات شخصية، موافقات واحتفاظ وCRM mapping | دراسة فقط؛ تحديد نموذج واستخدام البيانات |
-| Marketing API / Insights | تقارير إعلانات ثم إدارة اختيارية | ads_read للتقارير؛ ads_management للإدارة؛ business_management حسب عملية الأصل | حساب إعلاني ومهامه ومستوى الوصول المناسب | لا تفعيل حملات أو إنفاق تلقائي؛ حدود مستقلة | دراسة فقط؛ قرار تجاري ونطاق قراءة أولًا |
+| Catalog API | استعراض/إدارة كتالوج | catalog_management بحسب العملية | كتالوج مملوك/مشارك وصلاحيات ومراجعة مناسبة | نشاط التجارة وسياسات المنتج؛ لا نفترض إدارة الطلبات | اكتشاف واختيار ومزامنة منتجات منفذة؛ يلزم كتالوج مأذون واختبار حي |
+| Lead Ads | استقبال واسترجاع leads | leads_retrieval، وأذونات الصفحة/الاشتراك المطلوبة للمسار | صلاحية leads وأصول العميل ومراجعة | بيانات شخصية، موافقات واحتفاظ وCRM mapping | OAuth وleadgen واسترجاع leads والمزامنة منفذة؛ يلزم صفحة ونموذج وصلاحيات حية |
+| Marketing API / Insights | تقارير إعلانات ثم إدارة اختيارية | ads_read للتقارير؛ ads_management للإدارة؛ business_management حسب عملية الأصل | حساب إعلاني ومهامه ومستوى الوصول المناسب | لا تفعيل حملات أو إنفاق تلقائي؛ حدود مستقلة | OAuth وقراءة Insights منفذان دون إدارة إعلانات؛ يلزم حساب إعلاني واختبار حي |
 
 مراجع المصفوفة: [WhatsApp App Review](https://developers.facebook.com/docs/whatsapp/solution-providers/app-review/sample-submission/)، [Instagram Login](https://developers.facebook.com/docs/instagram/platform/instagram-api/changelog/)، [Messenger conversations](https://developers.facebook.com/docs/graph-api/reference/page/conversations/)، [Pages Webhooks](https://developers.facebook.com/docs/graph-api/webhooks/getting-started/webhooks-for-pages)، [Page reference](https://developers.facebook.com/docs/graph-api/reference/page/)، [Business asset management](https://developers.facebook.com/docs/business-management-apis/business-asset-management/overview)، [System user permissions](https://developers.facebook.com/docs/business-management-apis/system-users/install-apps-and-generate-tokens/). يجب الرجوع لعقد endpoint بعينه قبل كتابة موصل الخدمات المؤجلة.
 
@@ -63,6 +65,6 @@
 
 1. تحديد App ID وBusiness Portfolio والنطاق النهائي وحالة التحقق من داخل حسابك؛ يمكن مشاركة المعرفات والحالات غير السرية فقط.
 2. تجهيز configuration ورقم وشركة اختبار، وإدخال الأسرار داخل اللوحة/بيئة المعاينة الآمنة.
-3. الموافقة على ترحيل **معاينة مستقلة** إلى schema 9 واختبار استعادتها؛ الإنتاج لم يتغير.
-4. تنفيذ التجربة الحية وتوثيق نتائجها، ثم استكمال مسار محو البيانات والتحقق من المتطلبات الرسمية قبل App Review.
+3. الموافقة على ترحيل **معاينة مستقلة** إلى schema 10 واختبار استعادتها؛ الإنتاج لم يتغير.
+4. تنفيذ التجربة الحية وتوثيق نتائجها، ثم اختبار مسار محو البيانات والتحقق من المتطلبات الرسمية قبل App Review.
 5. اعتماد الهوية القانونية ونموذج الاشتراك وحدود الاستخدام لاحقًا؛ لا تحصيل مدفوعات ولا ادعاء شراكة الآن.
