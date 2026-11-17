@@ -128,3 +128,22 @@ class PostgreSQLAcceptance(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM service_media WHERE ticket_id=?',(ticket['id'],)).fetchone()[0],1)
             db.execute('INSERT INTO service_retention_policy VALUES(?,?,0,?,?)',(self.a,180,'CI disabled policy',now()))
             db.execute('INSERT INTO service_channel_snapshots VALUES(?,?,?,?,?)',(aid,self.a,'{}','{}',now()))
+
+    def test_saas_quota_concurrent_and_grant_tenant_fk(self):
+        from wasla.saas import consume_message
+        from fastapi import HTTPException
+        from wasla.db import one
+        import psycopg
+        plan=uid();aid=uid()
+        with transaction() as db:
+            db.execute('INSERT INTO service_plans VALUES(?,?,?,?,?,1,?)',(plan,'PG sandbox','SAR',0,1,now()))
+            db.execute('INSERT INTO service_subscriptions VALUES(?,?,?,?,?)',(self.b,plan,json.dumps({'message_limit':1}),'trial',now()))
+            db.execute('INSERT INTO service_accounts(id,tenant_id,channel,provider_id,label,api_version,created_at) VALUES(?,?,?,?,?,?,?)',(aid,self.a,'whatsapp',uid(),'PG lifecycle','v26.0',now()))
+        def reserve(_):
+            try:
+                with transaction() as db:consume_message(db,self.b)
+                return 200
+            except HTTPException as error:return error.status_code
+        with ThreadPoolExecutor(2) as pool:self.assertEqual(sorted(pool.map(reserve,range(2))),[200,429])
+        with self.assertRaises(psycopg.errors.ForeignKeyViolation):
+            with transaction() as db:db.execute('INSERT INTO meta_grants VALUES(?,?,?,?,NULL,?)',(aid,self.b,'123','hash','unchecked'))

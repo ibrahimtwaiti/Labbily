@@ -596,7 +596,7 @@ def sitemap():
     return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls+'</urlset>',media_type='application/xml')
 
 from .service_api import router as service_router
-from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding
+from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding, meta_lifecycle, saas, meta_pages
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')
@@ -609,7 +609,7 @@ def shell(path:str,request:Request):
     if en:
         source=source.replace('lang="ar" dir="rtl"','lang="en" dir="ltr"').replace('وصلة | Wasla','Wasla | Connected sales and teams').replace('جارٍ تحميل وصلة…','Loading Wasla…').replace('انتقل للمحتوى','Skip to content')
     private=path.startswith('app') or path in {'login','setup'}
-    known=path in {'','services','platform','how-it-works','about','faq','pricing','privacy','terms','request','login','setup'} or path.startswith('app/') or path=='app' or path in {'services/'+s['id'] for s in SERVICES}
+    known=path in {'','services','platform','how-it-works','about','faq','pricing','privacy','terms','request','login','setup','signup'} or path.startswith('app/') or path=='app' or path in {'services/'+s['id'] for s in SERVICES}
     if private or not known: source=source.replace('</head>','<meta name="robots" content="noindex,nofollow"></head>')
     return HTMLResponse(source,status_code=200 if known else 404,headers={'Cache-Control':'no-store','Vary':'Cookie'})
 
@@ -618,6 +618,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 @app.exception_handler(RequestValidationError)
 async def safe_validation(request,exc):
-    if request.url.path.startswith('/api/v2/meta/'):
+    if request.url.path.startswith('/api/v2/meta/') or request.url.path=='/api/auth/register':
         return JSONResponse({'detail':'invalid_meta_request'},status_code=422)
     return await request_validation_exception_handler(request,exc)

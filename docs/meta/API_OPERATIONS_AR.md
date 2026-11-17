@@ -42,3 +42,26 @@
 ## شروط النشر
 
 التغيير فرع تطوير فوق V2، وليس ترقية main أو Production. يلزم إكمال اختبارات CI على commit النهائي، معاينة مع schema 6، تحقق UI والمتصفحات، ثم موافقة تغييرات النشر الحساسة. لا نحذف migration أو بيانات العملاء عند التراجع؛ نوقف onboarding والإرسال ونرجع إلى إصدار متوافق مع schema أو نستعيد في قاعدة مستقلة بعد قرار مشغل مخول.
+
+## تحديث التنفيذ — 18 نوفمبر 2026
+
+- `POST /api/v2/meta/accounts/{id}/token-health`: يعيد فحص app/scopes/asset/expiry. الطلب غير الصالح يزيل الرمز ويحجب الرسائل المنتظرة. فشل المزود المؤقت لا يلغي التفويض. لا يفترض تجديدًا تلقائيًا لرمز WhatsApp.
+- `POST /api/webhooks/meta/deauthorize`: نموذج `signed_request` موقّع HMAC-SHA256؛ ربط المستخدم بمعرف التطبيق، ومنع إعادة المعالجة. يلزم تسجيل عنوان HTTPS في إعدادات التطبيق. الربط السابق الذي لم يحفظ subject لا يمكن اكتشافه بهذا المسار قبل إعادة التفويض.
+- `GET /api/v2/meta/pages`؛ `POST /pages/start`, `/pages/exchange`, `/pages/connect`: حالة مرتبطة بالجلسة والشركة لمدة عشر دقائق، تبادل الكود خلفيًا، اختيار صفحة صريح من قائمة الأصول الممنوحة. تخزين رموز الاختيار مشفر ومؤقت.
+- `GET /pages/{id}/profile` و`POST /pages/{id}/subscribe`: ملف الصفحة واشتراك messages/message_deliveries. صلاحيات Facebook Login for Business: pages_show_list, pages_read_engagement, pages_manage_metadata, pages_messaging. حساب Facebook ذو مهمة MESSAGING على الصفحة.
+- `POST /pages/{id}/disconnect-remote`: إلغاء اشتراك التطبيق في الصفحة ثم إزالة الرمز محليًا؛ تعاد نتيجة الإلغاء البعيد بوضوح. لا يلغي صلاحيات مستخدم Facebook الشاملة لأنها قد تخدم صفحات أخرى.
+- Messenger يستخدم مسارات المحادثات والطابور القائمة؛ نصوص ضمن 24 ساعة مع `messaging_type=RESPONSE`. استقبال موقّع عبر `/api/webhooks/v2/messenger`، مع منع تكرار الرسائل وتحديث التسليم. مؤشرات read watermark والنشر على الصفحة غير منفذة.
+- `GET /api/v2/meta/usage`: عمليات الربط وبوابة الرسائل/الأصول؛ ليست فاتورة Meta، ولا تشمل كل مصادر اتصال المنصة القديمة.
+
+## الخدمات التجارية التجريبية
+
+- `GET /api/admin/commerce`, `POST /api/admin/commerce/plans`، `PUT /api/admin/commerce/subscriptions/{tenant}`: مدير مقدم الخدمة فقط؛ أسعار بوحدات العملة الصغرى، نسخة ثابتة للخطة عند الإسناد، حالة trial/paused.
+- `GET /api/v2/billing`, `POST /api/v2/billing/invoice`: مدير الشركة فقط؛ مسودة غير قابلة للدفع وغير ضريبية، واحدة لكل شهر UTC، بلا رسوم Meta.
+- حصة outbound_messages تحجز داخل معاملة إنشاء الرسالة. إعادة نفس Idempotency-Key لا تحجز مرتين. لا يُعاد احتساب المحاولات. لا تخصم الملاحظات الداخلية. التراجع عن المعاملة يعيد الحصة. الرسائل المقبولة في الطابور تستهلك الحصة ولو فشلت لاحقًا؛ هذا حد تشغيل وليس رسمًا ماليًا.
+- العملاء الحاليون دون اشتراك يحتفظون بسلوكهم الحالي؛ يجب إسناد خطة لتطبيق حدودها. حدود المقاعد/الحسابات ومحاسبة التكلفة الفعلية غير منفذة.
+- `POST /api/auth/register`: مغلق افتراضيًا؛ إعداد WASLA_SELF_SIGNUP_MODE=test يتيح طلبًا مع حساب معطل حتى المراجعة. `POST /api/admin/commerce/registrations/{tenant}/approve` يتطلب مرجع تحقق خارجي وإسناد خطة. لا يوجد إرسال بريد تحقق تلقائي.
+- مسارات الواجهة: `/signup`, `/app/billing`, `/app/commerce`. جميع عمليات الإدارة تستخدم جلسة وCSRF.
+
+ترحيلات 008–010 إضافية، تتطلب `python -m wasla.cli init` في بيئة اختبار أولًا. لا تنفذ أثناء الطلبات على PostgreSQL. يعاد بناء قيد قنوات SQLite داخل معاملة، مع فحص سلامة العلاقات والحفاظ على البيانات. لا تغيير لبيانات الإنتاج في هذا العمل.
+
+المراجع الرسمية: https://developers.facebook.com/documentation/business-messaging/messenger-platform/send-messages وhttps://developers.facebook.com/docs/pages-api/webhooks-for-pages/ وhttps://developers.facebook.com/documentation/facebook-login/guides/advanced/manual-flow/ .

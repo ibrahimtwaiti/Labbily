@@ -73,16 +73,15 @@ def check_account(ident:str,u=Depends(user)):
 def disconnect(ident:str,u=Depends(user)):
     permit(u,'settings')
     with transaction() as db:
-        get(db,'service_accounts',ident,u); db.execute("UPDATE service_accounts SET state='disconnected',token_ref='' WHERE id=?",(ident,))
-        db.execute("UPDATE meta_connections SET subscription_state='disconnected',registration_state='pending' WHERE account_id=?",(ident,))
-        db.execute('DELETE FROM service_secrets WHERE account_id=?',(ident,))
-        db.execute('DELETE FROM service_oauth_states WHERE account_id=?',(ident,))
+        get(db,'service_accounts',ident,u,True)
+        from .meta_lifecycle import disconnect_local
+        disconnect_local(db,ident,'owner_disconnect')
         audit(db,u,'service.account.disconnected',ident)
     return {'ok':True}
 
 @router.get('/api/webhooks/v2/{channel}')
 def verify(channel:str,request:Request):
-    if channel not in {'whatsapp','instagram'}: raise HTTPException(409,'unsupported_webhook')
+    if channel not in {'whatsapp','instagram','messenger'}: raise HTTPException(409,'unsupported_webhook')
     secret=configured_value('META_VERIFY_TOKEN'); q=request.query_params
     import hmac
     if secret and q.get('hub.mode')=='subscribe' and hmac.compare_digest(q.get('hub.verify_token','').encode(),secret.encode()): return PlainTextResponse(q.get('hub.challenge',''))
@@ -90,8 +89,8 @@ def verify(channel:str,request:Request):
 
 @router.post('/api/webhooks/v2/{channel}')
 async def receive(channel:str,request:Request):
-    if channel not in {'whatsapp','instagram'}: raise HTTPException(409,'unsupported_webhook')
-    secret=configured_value('META_APP_SECRET') if channel=='whatsapp' else configured_value('INSTAGRAM_APP_SECRET')
+    if channel not in {'whatsapp','instagram','messenger'}: raise HTTPException(409,'unsupported_webhook')
+    secret=configured_value('META_APP_SECRET') if channel in {'whatsapp','messenger'} else configured_value('INSTAGRAM_APP_SECRET')
     if not secret: raise HTTPException(503,'app_secret_missing')
     raw=await request.body()
     if not s.valid_signature(raw,request.headers.get('X-Hub-Signature-256',''),secret): raise HTTPException(401,'invalid_signature')
@@ -174,7 +173,10 @@ def enqueue(ident:str,data:dict,request:Request,u=Depends(user)):
             return {'id':old['message_id'],'status':old['state']}
         version(data,t)
         identity=get(db,'service_identities',t['identity_id'],u); a=get(db,'service_accounts',identity['account_id'],u)
-        if direction=='out': s.policy(db,a,t,p)
+        if direction=='out':
+            s.policy(db,a,t,p)
+            from .saas import consume_message
+            consume_message(db,u['tenant_id'])
         mid=uid(); stamp=int(time.time()); state='queued' if direction=='out' else 'internal'
         db.execute('INSERT INTO service_messages(id,tenant_id,ticket_id,account_id,direction,body,status,author_id,occurred_at,created_at,kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
             (mid,u['tenant_id'],ident,a['id'],direction,body,state,u['id'],stamp,stamp,p['kind']))

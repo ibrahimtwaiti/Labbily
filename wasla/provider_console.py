@@ -12,6 +12,8 @@ from .service_oauth import cipher
 from .runtime_configuration import value
 
 FIELDS={
+ 'WASLA_SELF_SIGNUP_MODE':('Self signup: disabled or test','text'),
+ 'META_FACEBOOK_CONFIG_ID':('Facebook Login for Business configuration ID','text'),
  'META_APP_ID':('Meta app ID','text'),
  'META_SIGNUP_CONFIG_ID':('Embedded Signup configuration ID','text'),
  'META_GRAPH_VERSION':('Supported Graph API version','text'),
@@ -66,9 +68,9 @@ def configure(data:dict,u=Depends(user)):
     for k,v in fields.items():
         if not isinstance(v,str) or len(v)>8192:raise HTTPException(422,'invalid_configuration_value')
         if not v:continue # Empty fields preserve current values.
-        if k=='META_SIGNUP_MODE' and v not in {'disabled','test'}:raise HTTPException(422,'test_mode_only_until_launch_review')
+        if k in {'META_SIGNUP_MODE','WASLA_SELF_SIGNUP_MODE'} and v not in {'disabled','test'}:raise HTTPException(422,'test_mode_only_until_launch_review')
         if k=='META_GRAPH_VERSION' and v not in {'v25.0','v26.0'}:raise HTTPException(422,'review_supported_graph_version')
-        if k in {'META_APP_ID','META_SIGNUP_CONFIG_ID'} and not re.fullmatch(r'[0-9]{1,40}',v):raise HTTPException(422,'numeric_meta_id_required')
+        if k in {'META_APP_ID','META_SIGNUP_CONFIG_ID','META_FACEBOOK_CONFIG_ID'} and not re.fullmatch(r'[0-9]{1,40}',v):raise HTTPException(422,'numeric_meta_id_required')
         if FIELDS[k][1]=='url':
             parsed=urlparse(v)
             if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:raise HTTPException(422,'https_url_required')

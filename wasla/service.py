@@ -13,7 +13,7 @@ import httpx
 from fastapi import HTTPException
 from .db import transaction, one, rows, uid, now, postgres
 
-CHANNELS = {'whatsapp', 'instagram', 'tiktok', 'snapchat'}
+CHANNELS = {'whatsapp', 'instagram', 'tiktok', 'snapchat', 'messenger'}
 STATES = {'new', 'in_progress', 'waiting_customer', 'waiting_internal', 'resolved', 'closed'}
 RANK = {'queued': 0, 'accepted': 1, 'sent': 2, 'failed': 2, 'delivered': 3, 'read': 4}
 DEFAULT_SETTINGS = {'timezone': 'Asia/Riyadh', 'workdays': [0,1,2,3,6], 'start_hour': 9, 'end_hour': 17,
@@ -24,10 +24,10 @@ def settings(db, tid):
     return {**DEFAULT_SETTINGS, **(json.loads(r['settings']) if r else {})}
 
 def capabilities(channel):
-    return {'channel': channel, 'messaging': channel in {'whatsapp','instagram'},
-            'types': ['text','template','image','document'] if channel=='whatsapp' else ['text'] if channel=='instagram' else [],
-            'reply_window_hours': 24 if channel in {'whatsapp','instagram'} else 48 if channel=='tiktok' else None,
-            'delivery_events': channel=='whatsapp', 'media_download': channel in {'whatsapp','instagram'},
+    return {'channel': channel, 'messaging': channel in {'whatsapp','instagram','messenger'},
+            'types': ['text','template','image','document'] if channel=='whatsapp' else ['text'] if channel in {'instagram','messenger'} else [],
+            'reply_window_hours': 24 if channel in {'whatsapp','instagram','messenger'} else 48 if channel=='tiktok' else None,
+            'delivery_events': channel in {'whatsapp','messenger'}, 'media_download': channel in {'whatsapp','instagram'},
             'reason': 'requires_business_messaging_approval_and_provider_contract' if channel=='tiktok' else
             'public_profile_or_referral_only_not_customer_dm' if channel=='snapchat' else 'requires_verified_account'}
 
@@ -36,7 +36,7 @@ def valid_signature(raw, header, secret):
     return bool(secret) and hmac.compare_digest(expected.encode(), header.encode('utf-8'))
 
 def token(account):
-    if account.get('state')=='disconnected': return ''
+    if account.get('state') in {'disconnected','reauthorize'}: return ''
     # Account mapping is provisioned by an operator, never an arbitrary env name from a tenant.
     if account.get('token_ref','').startswith('vault:'):
         from .service_oauth import read_token
@@ -44,14 +44,25 @@ def token(account):
     return os.getenv('WASLA_CHANNEL_'+account['id'].upper()+'_TOKEN', '')
 
 def provider_request(account, method, suffix='', payload=None):
-    if account['channel'] not in {'whatsapp','instagram'}:
+    if account['channel'] not in {'whatsapp','instagram','messenger'}:
         raise HTTPException(409, 'unsupported_channel')
     credential = token(account)
     if not credential: raise HTTPException(409, 'channel_credentials_missing')
-    host = 'graph.facebook.com' if account['channel']=='whatsapp' else 'graph.instagram.com'
+    host = 'graph.facebook.com' if account['channel'] in {'whatsapp','messenger'} else 'graph.instagram.com'
     url = f"https://{host}/{account['api_version']}/{account['provider_id']}{suffix}"
-    return httpx.request(method, url, headers={'Authorization': 'Bearer '+credential}, json=payload,
+    start=time.monotonic();status=0;error=''
+    try:
+        response=httpx.request(method, url, headers={'Authorization': 'Bearer '+credential}, json=payload,
                          timeout=httpx.Timeout(15, connect=5), follow_redirects=False)
+        status=response.status_code
+        if status>=300:error='http_'+str(status)
+        return response
+    except httpx.HTTPError:
+        error='transport_error'
+        raise
+    finally:
+        with transaction() as db:
+            db.execute('INSERT INTO meta_api_usage VALUES(?,?,?,?,?,?,?)',(uid(),account['tenant_id'],account['channel']+':'+method+(':messages' if suffix=='/messages' else ':asset'),status,error,int((time.monotonic()-start)*1000),int(time.time())))
 
 def normalize(channel, payload):
     """Yield (asset id, semantic key, normalized event); never trust a supplied tenant."""
@@ -67,17 +78,21 @@ def normalize(channel, payload):
                 for status in value.get('statuses', []):
                     yield asset, f"status:{status['id']}:{status['status']}:{status['timestamp']}", {
                         'type':'status','id':str(status['id']),'status':status['status'],'at':int(status['timestamp'])}
-    elif channel=='instagram':
-        if payload.get('object')!='instagram': raise ValueError('wrong_object')
+    elif channel in {'instagram','messenger'}:
+        if payload.get('object')!=('page' if channel=='messenger' else 'instagram'): raise ValueError('wrong_object')
         for entry in payload['entry']:
             asset=str(entry['id'])
             for item in entry.get('messaging', []):
+                if channel=='messenger':
+                    for mid in item.get('delivery',{}).get('mids',[]):
+                        stamp=int(item.get('timestamp',0))//1000
+                        yield asset,'delivered:'+str(mid),{'type':'status','id':str(mid),'status':'delivered','at':stamp}
                 msg=item.get('message')
                 if not msg: continue
                 mid=str(msg['mid']); echo=bool(msg.get('is_echo'))
                 yield asset, 'message:'+mid, {'type':'message','id':mid,'user':str(item['recipient' if echo else 'sender']['id']),
                     'at':int(item['timestamp'])//1000,'kind':'text' if 'text' in msg else 'unsupported',
-                    'body':msg.get('text','[مرفق أو نوع غير مدعوم؛ لم يُنزّل الملف]'),'direction':'out' if echo else 'in', 'media':next(({'url':x.get('payload',{}).get('url','')} for x in msg.get('attachments',[]) if x.get('type')=='image'),None)}
+                    'body':msg.get('text','[مرفق أو نوع غير مدعوم؛ لم يُنزّل الملف]'),'direction':'out' if echo else 'in', 'media':next(({'url':x.get('payload',{}).get('url','')} for x in msg.get('attachments',[]) if channel=='instagram' and x.get('type')=='image'),None)}
     else: raise ValueError('unsupported_channel')
 
 def persist_events(channel, payload):
@@ -158,6 +173,11 @@ def process_event():
         return False
 
 def policy(db,a,ticket,payload):
+    if a['channel']=='messenger':
+        from .runtime_configuration import value
+        binding=one(db,'SELECT subscription_state FROM meta_page_connections WHERE account_id=?',(a['id'],))
+        if not binding or binding['subscription_state']!='subscribed':raise HTTPException(409,'page_subscription_required')
+        if value('META_SIGNUP_MODE')!='test' or a['tenant_id'] not in value('META_TEST_TENANTS').split(','):raise HTTPException(409,'meta_test_workspace_required')
     binding=one(db,'SELECT * FROM meta_connections WHERE account_id=? AND tenant_id=?',(a['id'],a['tenant_id']))
     if binding and (binding['subscription_state']!='subscribed' or binding['registration_state']!='registered'):
         raise HTTPException(409,'meta_onboarding_incomplete')
@@ -232,6 +252,7 @@ def send_outbox():
         db.execute("UPDATE service_outbox SET state='sending',claimed_at=?,attempts=attempts+1 WHERE id=?",(clock,o['id']))
     state='unknown'; error='dispatch_outcome_unknown'; pid=None; retry=0; reauth=False
     try:
+        if a['channel']=='messenger':body['messaging_type']='RESPONSE'
         response=provider_request(a,'POST','/messages',body)
         if response.status_code==429:
             state='retry' if o['attempts']<4 else 'dead'; error='rate_limited'

@@ -99,9 +99,9 @@ def validate_token(info,app_id,waba):
         raise HTTPException(502,'meta_invalid_token_inspection')
     if info.get('is_valid') is not True or str(info.get('app_id'))!=app_id:
         raise HTTPException(409,'meta_token_app_or_validity_mismatch')
-    if not SCOPES.issubset(set(info.get('scopes',[]))):
+    if not SCOPES.issubset({s for s in info.get('scopes',[]) if isinstance(s,str)}):
         raise HTTPException(409,'meta_required_permissions_missing')
-    if any(not isinstance(g,dict) or not isinstance(g.get('target_ids',[]),list) for g in info.get('granular_scopes',[])):
+    if any(not isinstance(g,dict) or not isinstance(g.get('scope'),str) or not isinstance(g.get('target_ids',[]),list) for g in info.get('granular_scopes',[])):
         raise HTTPException(502,'meta_invalid_token_inspection')
     grants={g.get('scope'):set(map(str,g.get('target_ids',[]))) for g in info.get('granular_scopes',[])}
     if waba not in grants.get('whatsapp_business_management',set()):
@@ -122,13 +122,13 @@ def readiness(u=Depends(user)):
     except HTTPException: available=False
     with transaction() as db:
         connections=rows(db,'''SELECT m.*,a.label,a.provider_id phone_number_id,a.state,a.expires_at,
-            a.last_inbound_at,a.last_outbound_at FROM meta_connections m JOIN service_accounts a ON a.id=m.account_id
+            a.last_inbound_at,a.last_outbound_at,g.health token_health,g.checked_at token_checked_at FROM meta_connections m JOIN service_accounts a ON a.id=m.account_id LEFT JOIN meta_grants g ON g.account_id=a.id
             WHERE m.tenant_id=?''',(u['tenant_id'],))
     return {'signup_available':available,'mode': 'test' if available else 'disabled',
         'production_approved':False,'meta_approval_verified':False,'connections':connections,
         'services':[{'service':'whatsapp','implementation':'standard_cloud_api_test_candidate'},
                     {'service':'instagram','implementation':'existing_instagram_login_candidate'},
-                    *[{'service':s,'implementation':'not_implemented'} for s in ['messenger','pages','catalogs','lead_ads','marketing']]]}
+                    {'service':'messenger','implementation':'text_messaging_test_candidate'},{'service':'pages','implementation':'page_selection_and_profile_test_candidate'},*[{'service':s,'implementation':'not_implemented'} for s in ['catalogs','lead_ads','marketing']]]}
 
 
 @router.post('/api/v2/meta/whatsapp/start',tags=['Meta integrations'])
@@ -198,6 +198,8 @@ def complete(data:CompleteSignup,request:Request,u=Depends(user)):
         db.execute('INSERT INTO service_secrets VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET ciphertext=excluded.ciphertext,issued_at=excluded.issued_at',(aid,encrypted,clock))
         db.execute("UPDATE service_accounts SET token_ref=?,scopes=?,expires_at=?,api_version=?,state='unverified',checked_at=NULL WHERE id=?",('vault:'+aid,json.dumps(sorted(SCOPES)),expires,v,aid))
         db.execute("INSERT INTO meta_connections VALUES(?,?,?,'pending','pending',?) ON CONFLICT(account_id) DO UPDATE SET subscription_state='pending',registration_state='pending',connected_at=excluded.connected_at",(aid,tid,waba,now()))
+        subject=str(info.get('user_id') or '')
+        db.execute('INSERT INTO meta_grants VALUES(?,?,?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET app_id=excluded.app_id,subject_hash=excluded.subject_hash,checked_at=excluded.checked_at,health=excluded.health',(aid,tid,c['META_APP_ID'],digest(subject) if subject else '',clock,'valid'))
         audit(db,u,'meta.signup.authorized',aid)
     return {'account_id':aid,'authorization':'verified','registration':'pending','subscription':'pending','live_messaging_verified':False}
 
@@ -215,13 +217,20 @@ def connection(ident,u):
     return a,m,credential
 
 
+def ensure_credential(db,ident,u,credential):
+    current=get(db,'service_accounts',ident,u,True)
+    saved=one(db,'SELECT ciphertext FROM service_secrets WHERE account_id=?',(ident,))
+    if current['state']=='disconnected' or not saved or not hmac.compare_digest(cipher().decrypt(saved['ciphertext'].encode()),credential.encode()):
+        raise HTTPException(409,'meta_connection_changed_retry')
+
+
 @router.post('/api/v2/meta/accounts/{ident}/subscribe',tags=['Meta integrations'])
 def subscribe(ident:str,u=Depends(user)):
     a,m,credential=connection(ident,u)
     result=graph(u['tenant_id'],a['api_version'],'subscribe',m['business_account_id']+'/subscribed_apps',token=credential,method='POST',payload={})
     if result.get('success') is not True:raise HTTPException(502,'meta_subscription_not_confirmed')
     with transaction() as db:
-        get(db,'service_accounts',ident,u,True)
+        ensure_credential(db,ident,u,credential)
         db.execute("UPDATE meta_connections SET subscription_state='subscribed' WHERE account_id=?",(ident,));audit(db,u,'meta.webhook.subscribed',ident)
     return {'subscription':'subscribed','webhook_delivery_verified':False}
 
@@ -234,7 +243,7 @@ def register(ident:str,data:RegisterPhone,u=Depends(user)):
     result=graph(u['tenant_id'],a['api_version'],'register',a['provider_id']+'/register',token=credential,method='POST',payload={'messaging_product':'whatsapp','pin':pin})
     if result.get('success') is not True:raise HTTPException(502,'meta_registration_not_confirmed')
     with transaction() as db:
-        get(db,'service_accounts',ident,u,True)
+        ensure_credential(db,ident,u,credential)
         db.execute("UPDATE meta_connections SET registration_state='registered' WHERE account_id=?",(ident,));audit(db,u,'meta.phone.registered',ident)
     return {'registration':'registered','live_messaging_verified':False}
 
@@ -243,7 +252,7 @@ def register(ident:str,data:RegisterPhone,u=Depends(user)):
 def usage(u=Depends(user)):
     permit(u,'settings')
     with transaction() as db:
-        return {'scope':'onboarding_operations_only','window_days':30,'totals':rows(db,'''SELECT operation,count(*) requests,
+        return {'scope':'onboarding_and_service_gateway','window_days':30,'totals':rows(db,'''SELECT operation,count(*) requests,
             SUM(CASE WHEN error_code='' THEN 1 ELSE 0 END) successful,SUM(CASE WHEN error_code<>'' THEN 1 ELSE 0 END) failed
             FROM meta_api_usage WHERE tenant_id=? AND created_at>=? GROUP BY operation''',(u['tenant_id'],int(time.time())-30*86400)),
             'errors':rows(db,"SELECT error_code,count(*) count FROM meta_api_usage WHERE tenant_id=? AND created_at>=? AND error_code<>'' GROUP BY error_code",(u['tenant_id'],int(time.time())-30*86400))}

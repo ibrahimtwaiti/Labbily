@@ -24,7 +24,7 @@ class MetaOnboarding(unittest.TestCase):
         self.assertNotIn('secret',r.text);return r.json()['state']
 
     def responses(self,**overrides):
-        info={'app_id':'123','is_valid':True,'scopes':sorted(meta.SCOPES),'expires_at':int(time.time())+3600,'granular_scopes':[{'scope':'whatsapp_business_management','target_ids':['900']}]}
+        info={'user_id':'700','app_id':'123','is_valid':True,'scopes':sorted(meta.SCOPES),'expires_at':int(time.time())+3600,'granular_scopes':[{'scope':'whatsapp_business_management','target_ids':['900']}]}
         info.update(overrides)
         return [httpx.Response(200,json={'access_token':'customer-secret'}),httpx.Response(200,json={'data':info}),httpx.Response(200,json={'data':[{'id':'901','verified_name':'Customer'}]})]
 
@@ -131,3 +131,44 @@ class MetaOnboarding(unittest.TestCase):
             r=self.client.post('/api/v2/meta/accounts/'+aid+'/subscribe',json={})
         self.assertEqual(r.status_code,502)
         with transaction() as db:self.assertEqual(one(db,'SELECT subscription_state FROM meta_connections WHERE account_id=?',(aid,))['subscription_state'],'pending')
+
+    def signed(self, subject='700', **changes):
+        import base64,hashlib,hmac,json
+        data={'user_id':subject,'algorithm':'HMAC-SHA256','issued_at':int(time.time()),**changes}
+        enc=lambda b:base64.urlsafe_b64encode(b).rstrip(b'=').decode()
+        encoded=enc(json.dumps(data).encode())
+        return enc(hmac.new(os.environ['META_APP_SECRET'].encode(),encoded.encode(),hashlib.sha256).digest())+'.'+encoded
+
+    def test_signed_deauthorization_and_replay(self):
+        aid=self.connected();signed=self.signed()
+        self.client.headers.pop('X-CSRF-Token')
+        self.client.cookies.clear()
+        for _ in range(2):
+            response=self.client.post('/api/webhooks/meta/deauthorize',data={'signed_request':signed})
+            self.assertEqual(response.status_code,200,response.text)
+        with transaction() as db:
+            self.assertEqual(one(db,'SELECT state FROM service_accounts WHERE id=?',(aid,))['state'],'disconnected')
+            self.assertIsNone(one(db,'SELECT * FROM service_secrets WHERE account_id=?',(aid,)))
+            self.assertEqual(db.execute('SELECT count(*) FROM meta_callback_receipts').fetchone()[0],1)
+
+    def test_callback_signature_subject_algorithm_and_future(self):
+        aid=self.connected()
+        for signed in ['tampered.'+self.signed().split('.')[1], self.signed(algorithm='none'),self.signed(issued_at=int(time.time())+3600)]:
+            self.assertEqual(self.client.post('/api/webhooks/meta/deauthorize',data={'signed_request':signed}).status_code,403)
+        self.assertEqual(self.client.post('/api/webhooks/meta/deauthorize',data={'signed_request':self.signed('999')}).status_code,200)
+        with transaction() as db:self.assertIsNotNone(one(db,'SELECT * FROM service_secrets WHERE account_id=?',(aid,)))
+
+    def test_health_invalid_erases_secret_and_requires_signup(self):
+        aid=self.connected();path='/api/v2/meta/accounts/'+aid+'/token-health'
+        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':{'is_valid':False}})):
+            result=self.client.post(path,json={});self.assertEqual(result.status_code,200,result.text)
+            self.assertEqual(result.json()['health'],'reauthorize')
+        with transaction() as db:self.assertIsNone(one(db,'SELECT * FROM service_secrets WHERE account_id=?',(aid,)))
+        self.assertEqual(self.client.post(path,json={}).status_code,409)
+
+    def test_health_outage_preserves_token_and_tenant_isolation(self):
+        aid=self.connected();path='/api/v2/meta/accounts/'+aid+'/token-health'
+        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(503,json={'error':{'code':2}})):
+            self.assertEqual(self.client.post(path,json={}).status_code,502)
+        with transaction() as db:self.assertIsNotNone(one(db,'SELECT * FROM service_secrets WHERE account_id=?',(aid,)))
+        self.login('admin-b');self.assertEqual(self.client.post(path,json={}).status_code,404)

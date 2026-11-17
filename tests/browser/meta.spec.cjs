@@ -1,6 +1,6 @@
 const {test,expect}=require('@playwright/test');
 async function login(page){
- await page.goto('/login?lang=en');await page.locator('[name=email]').fill('service@example.test');await page.locator('[name=password]').fill('service-test-password');await page.locator('button[type=submit]').click();await page.waitForURL('**/app');
+ await page.goto('/login?lang=en');await page.locator('[name=email]').fill('meta@example.test');await page.locator('[name=password]').fill('service-test-password');await page.locator('button[type=submit]').click();await page.waitForURL('**/app');
 }
 test('Meta connection remains visibly disabled without configuration',async({page})=>{
  await login(page);await page.goto('/app/channels?lang=en');
