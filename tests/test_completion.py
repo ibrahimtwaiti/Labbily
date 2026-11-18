@@ -274,7 +274,10 @@ class Completion(unittest.TestCase):
         with transaction() as db:db.execute("INSERT INTO tenants(id,name,created_at) VALUES('a','restored',?)",(now(),))
         dry=replay_ledger(ledger);self.assertEqual(len(dry['jobs']),1)
         with transaction() as db:self.assertNotEqual(one(db,"SELECT status FROM tenants WHERE id='a'")['status'],'suspended')
-        first=replay_ledger(ledger,True);self.assertEqual(first,replay_ledger(ledger,True));privacy.process_deletion()
+        with patch.dict(os.environ,{'WASLA_ENV':'restore'}):
+            first=replay_ledger(ledger,True);self.assertEqual(first,replay_ledger(ledger,True))
+            from scripts.deletion_ledger import drain_replay
+            self.assertEqual(drain_replay(first['jobs']),0)
         with transaction() as db:self.assertIsNone(one(db,"SELECT id FROM tenants WHERE id='a'"))
     def test_provider_data_delegation_and_secret_validation(self):
         aid=self.data_connect('catalogs');path='/api/admin/workspaces/a/meta-data'
@@ -309,3 +312,83 @@ class Completion(unittest.TestCase):
         self.assertEqual(self.client.post('/api/auth/register',json=body).status_code,409)
         r=self.client.post('/api/auth/register',json={**body,'terms_version':policy['terms_version']});self.assertEqual(r.status_code,202,r.text);self.assertEqual(r.json()['mode'],'trial')
         with transaction() as db:self.assertEqual(one(db,"SELECT terms_version FROM service_registrations r JOIN users u ON u.id=r.user_id WHERE u.email='reviewed@example.test'")['terms_version'],'terms-2026-11')
+
+    def test_hosted_sessions_and_health_identify_running_release(self):
+        from wasla.main import app
+        for env in ({'WASLA_ENV':'staging'}, {'VERCEL_ENV':'preview'}):
+            with self.subTest(env=env),patch.dict(os.environ,env):
+                self.client.headers['Origin']='https://testserver' if 'VERCEL_ENV' in env else 'http://localhost:8000'
+                r=self.client.post('/api/auth/login',json={'email':'admin-a@example.test','password':base.PASSWORD})
+                self.assertEqual(r.status_code,200)
+                self.assertIn('Secure',r.headers['set-cookie'])
+                self.assertIn('HttpOnly',r.headers['set-cookie'])
+                self.assertIn('max-age=',r.headers['strict-transport-security'])
+                self.assertEqual(self.client.get('/api/health').json()['version'],app.version)
+
+    def test_signup_availability_requires_plan_and_mail_and_verifies_trial(self):
+        path='/api/public/plans'
+        self.assertFalse(self.client.get(path).json()['signup_enabled'])
+        plan=self.plan()
+        with patch.dict(os.environ,{'WASLA_EMAIL_MODE':'disabled'}):
+            self.assertFalse(self.client.get(path).json()['signup_enabled'])
+        with patch.dict(os.environ,{'WASLA_SELF_SIGNUP_MODE':'enabled','WASLA_SIGNUP_APPROVAL_REFERENCE':'reviewed test trial','WASLA_SIGNUP_TERMS_VERSION':'trial-v2'}):
+            data={'company':'Trial workspace','name':'Owner','email':'trial-owner@example.test','password':'trial-password-long-123','terms_version':'trial-v2','plan_id':plan}
+            self.assertEqual(self.client.post('/api/auth/register',json=data).status_code,202)
+            with transaction() as db:
+                token=json.loads(cipher().decrypt(one(db,'SELECT ciphertext FROM email_jobs')['ciphertext'].encode()))['url'].split('#')[1]
+            r=self.client.post('/api/auth/verification/complete',json={'token':token})
+            self.assertEqual(r.json()['mode'],'trial')
+            with transaction() as db:self.assertEqual(one(db,"SELECT status FROM tenants WHERE name='Trial workspace'")['status'],'active')
+
+    def test_restore_replay_with_stale_credentials_files_and_unrelated_pending_job(self):
+        from scripts.deletion_ledger import replay_ledger,drain_replay
+        aid=self.account()
+        ledger={'format':'wasla-erasure-ledger-v1','deletions':[{'id':'archive-job','tenant_id':'a','requester_id':'admin-a','scope':'tenant','targets':json.dumps({'accounts':[aid],'data_accounts':[]})}]}
+        with transaction() as db:
+            db.execute('INSERT INTO service_secrets VALUES(?,?,?)',(aid,'retired-encryption-key',1))
+            other=privacy.queue(db,'b','admin-b','tenant')
+        with self.assertRaisesRegex(ValueError,'isolated_restore'):
+            replay_ledger(ledger,True)
+        with patch.dict(os.environ,{'WASLA_ENV':'restore'}):
+            jobs=replay_ledger(ledger,True)['jobs']
+            with transaction() as db:
+                db.execute('UPDATE deletion_jobs SET remote_ciphertext=? WHERE id=?',('old-ciphertext',jobs[0]))
+                db.execute('INSERT INTO deletion_objects VALUES(?,?)',(jobs[0],'source/object'))
+            with patch('wasla.service_media.client') as storage,patch('wasla.privacy.httpx.request') as meta:
+                self.assertEqual(drain_replay(jobs),0);storage.assert_not_called();meta.assert_not_called()
+            with transaction() as db:
+                self.assertIsNone(one(db,"SELECT id FROM tenants WHERE id='a'"))
+                self.assertEqual(one(db,'SELECT state FROM deletion_jobs WHERE id=?',(other,))['state'],'pending')
+
+    def test_restored_original_job_is_local_and_respects_hold(self):
+        from scripts.deletion_ledger import replay_ledger,drain_replay
+        with transaction() as db:
+            ident=privacy.queue(db,'a','admin-a','tenant')
+            db.execute('INSERT INTO deletion_objects VALUES(?,?)',(ident,'source/file'))
+            db.execute("INSERT INTO retention_holds VALUES('tenant','a','documented case',NULL,?)",(now(),))
+        row={'id':ident,'tenant_id':'a','requester_id':'admin-a','scope':'tenant','targets':'{"accounts":[],"data_accounts":[]}'}
+        with patch.dict(os.environ,{'WASLA_ENV':'restore'}):
+            ledger={'format':'wasla-erasure-ledger-v1','deletions':[row]}
+            self.assertEqual(replay_ledger(ledger,True)['jobs'],[ident])
+            self.assertEqual(drain_replay([ident]),1)
+            with transaction() as db:
+                self.assertEqual(one(db,'SELECT state FROM deletion_jobs WHERE id=?',(ident,))['state'],'blocked_hold')
+                self.assertIsNone(one(db,'SELECT * FROM deletion_objects WHERE job_id=?',(ident,)))
+                db.execute("DELETE FROM retention_holds WHERE entity_type='tenant' AND entity_id='a'")
+            self.assertEqual(drain_replay(replay_ledger(ledger,True)['jobs']),0)
+
+    def test_manual_meta_setup_requires_provider_and_inbound_requires_proof(self):
+        self.login()
+        data={'provider_id':'staging_asset','channel':'whatsapp','api_version':'v26.0','label':'Test fixture'}
+        self.assertEqual(self.client.post('/api/v2/accounts',json={**data,'provider_delegated':True}).status_code,409)
+        self.login('provider')
+        r=self.client.post('/api/admin/workspaces/a/integrations',json=data)
+        self.assertEqual(r.status_code,201); aid=r.json()['id']
+        payload={'object':'whatsapp_business_account','entry':[{'changes':[{'value':{'metadata':{'phone_number_id':data['provider_id']},'messages':[{'id':'fixture','from':'12345678901','timestamp':'1','type':'text','text':{'body':'test'}}]}}]}]}
+        with self.assertRaises(HTTPException):service.persist_events('whatsapp',payload)
+        with transaction() as db:
+            db.execute("INSERT INTO meta_grants VALUES(?,?,?,?,?,'valid')",(aid,'a','test-app','subject',1))
+        self.assertEqual(service.persist_events('whatsapp',payload),1)
+        with transaction() as db:db.execute("UPDATE meta_grants SET health='revoked' WHERE account_id=?",(aid,))
+        self.assertFalse(service.process_event())
+        with transaction() as db:self.assertFalse(one(db,'SELECT id FROM service_messages WHERE account_id=?',(aid,)))

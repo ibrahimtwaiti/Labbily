@@ -27,10 +27,13 @@ STATIC=Path(__file__).parent/'static'
 REQUEST_STATES={'new','review','information','quoted','accepted','rejected','closed'}
 STAGES={'new','qualified','meeting','proposal','negotiation','won','lost'}
 
+def hosted_https():
+    return os.getenv('WASLA_ENV') in {'staging', 'production'} or os.getenv('VERCEL_ENV') in {'preview', 'production'}
+
 @asynccontextmanager
 async def lifespan(app):
-    if os.getenv('WASLA_ENV')=='production' and not os.getenv('WASLA_ORIGIN','').startswith('https://'):
-        raise RuntimeError('Production requires an explicit HTTPS WASLA_ORIGIN')
+    if hosted_https() and not os.getenv('WASLA_ORIGIN','').startswith('https://'):
+        raise RuntimeError('Hosted deployments require an explicit HTTPS WASLA_ORIGIN')
     initialize()
     yield
 
@@ -56,7 +59,7 @@ async def protect(request, call_next):
         response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self' https://connect.facebook.net; style-src 'self'; img-src 'self' data: https://www.facebook.com; connect-src 'self' https://www.facebook.com https://graph.facebook.com; frame-src https://www.facebook.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
-    if os.getenv('WASLA_ENV')=='production': response.headers['Strict-Transport-Security']='max-age=31536000'
+    if hosted_https(): response.headers['Strict-Transport-Security']='max-age=31536000'
     return response
 
 @app.exception_handler(psycopg.IntegrityError)
@@ -143,7 +146,7 @@ def valid_date(value):
 @app.get('/api/health')
 def health():
     with transaction() as db: db.execute('SELECT 1')
-    return {'status':'ok','version':'2.0.0-rc.3'}
+    return {'status':'ok','version':app.version}
 
 @app.get('/api/catalog')
 def catalog(lang: str = "ar"):
@@ -241,7 +244,7 @@ def login(data:dict,request:Request,response:Response):
         db.execute('INSERT INTO sessions VALUES(?,?,?,?)',(digest(token),u['id'],csrf,timestamp+SESSION_ABSOLUTE_SECONDS))
         db.execute('INSERT INTO session_activity(token_hash,issued_at,last_seen_at) VALUES(?,?,?)',(digest(token),timestamp,timestamp))
         audit(db,u,'auth.login',u['id'])
-    response.set_cookie('wasla_session',token,max_age=SESSION_ABSOLUTE_SECONDS,httponly=True,secure=os.getenv('WASLA_ENV')=='production',samesite='strict',path='/')
+    response.set_cookie('wasla_session',token,max_age=SESSION_ABSOLUTE_SECONDS,httponly=True,secure=hosted_https(),samesite='strict',path='/')
     return {'ok':True}
 
 @app.get('/api/me')

@@ -60,15 +60,16 @@ def complete(data:Verify,request:Request):
     if not 32<=len(token)<=128:raise HTTPException(422,'invalid_verification_token')
     with transaction() as db:limit(db,'verify-complete:'+digest(request.client.host),30,900)
     with transaction() as db:
-        r=one(db,'SELECT e.*,u.tenant_id FROM email_verifications e JOIN users u ON u.id=e.user_id WHERE e.token_hash=?',(digest(token),))
+        r=one(db,'SELECT e.*,u.tenant_id,r.terms_version FROM email_verifications e JOIN users u ON u.id=e.user_id JOIN service_registrations r ON r.user_id=u.id AND r.tenant_id=u.tenant_id WHERE e.token_hash=?',(digest(token),))
         if not r or r['verified_at'] or r['expires_at']<=int(time.time()):raise HTTPException(409,'verification_expired_or_used')
         from .entitlements import capacity
         capacity(db,r['tenant_id'],'seat')
         if db.execute('UPDATE email_verifications SET verified_at=?,token_hash=? WHERE user_id=? AND verified_at IS NULL AND token_hash=? AND expires_at>?',(int(time.time()),'',r['user_id'],digest(token),int(time.time()))).rowcount!=1:raise HTTPException(409,'verification_expired_or_used')
+        db.execute("UPDATE tenants SET status='active' WHERE id=? AND status='setup'",(r['tenant_id'],))
         db.execute('UPDATE users SET active=1 WHERE id=?',(r['user_id'],))
         db.execute("UPDATE service_registrations SET status='approved',review_evidence='email_verified' WHERE user_id=?",(r['user_id'],))
         db.execute("UPDATE email_jobs SET ciphertext='',state='verified' WHERE user_id=?",(r['user_id'],))
-    return {'status':'verified','next':'/login','mode':'sandbox'}
+    return {'status':'verified','next':'/login','mode':'sandbox' if r['terms_version']=='sandbox-v1' else 'trial'}
 
 @router.get('/api/v2/email-status')
 def status(u=Depends(user)):

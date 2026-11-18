@@ -51,6 +51,8 @@ def create_account(data:dict,u=Depends(user)):
     with transaction() as db:
         from .entitlements import capacity
         capacity(db,u['tenant_id'],'channel',channel)
+        if channel in {'whatsapp','instagram','messenger'} and not u.get('provider_delegated'):
+            raise HTTPException(409,'use_official_meta_onboarding')
         if channel=='messenger':
             from .entitlements import page_ownership
             page_ownership(db,u['tenant_id'],pid)
@@ -62,13 +64,19 @@ def create_account(data:dict,u=Depends(user)):
 @router.post('/api/v2/accounts/{ident}/check')
 def check_account(ident:str,u=Depends(user)):
     permit(u,'settings')
-    with transaction() as db: a=get(db,'service_accounts',ident,u)
+    with transaction() as db:
+        a=get(db,'service_accounts',ident,u)
+        credential=one(db,'SELECT ciphertext,issued_at FROM service_secrets WHERE account_id=?',(ident,))
+    if a['state']=='disconnected':raise HTTPException(409,'meta_reauthorization_required')
     try:
         response=s.provider_request(a,'GET'); result=response.json()
     except HTTPException: raise
     except Exception: raise HTTPException(502,'connection_check_failed')
     valid=response.status_code==200 and str(result.get('id'))==a['provider_id']
     with transaction() as db:
+        current=get(db,'service_accounts',ident,u,True)
+        if current['state']=='disconnected' or current['token_ref']!=a['token_ref'] or current['api_version']!=a['api_version'] or credential!=one(db,'SELECT ciphertext,issued_at FROM service_secrets WHERE account_id=?',(ident,)):
+            raise HTTPException(409,'meta_connection_changed_retry')
         db.execute('UPDATE service_accounts SET state=?,checked_at=? WHERE id=?',('verified' if valid else 'reauthorize',now(),ident))
         audit(db,u,'service.account.checked',ident,'verified_asset' if valid else 'failed')
     if not valid: raise HTTPException(409,'asset_verification_failed')

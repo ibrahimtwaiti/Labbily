@@ -61,7 +61,7 @@ class PostgreSQLAcceptance(unittest.TestCase):
         channel_id=uid(); phone_id=str(int(uuid4().hex[:10],16))
         event_ids=[]
         with transaction() as db:
-            db.execute('INSERT INTO channels(id,tenant_id,phone_id,token_env) VALUES(?,?,?,?)',
+            db.execute("INSERT INTO channels(id,tenant_id,phone_id,token_env,status) VALUES(?,?,?,?,'verified')",
                        (channel_id,self.a,phone_id,''))
             for i in range(2):
                 payload={'entry':[{'changes':[{'value':{'metadata':{'phone_number_id':phone_id},

@@ -165,7 +165,16 @@ def approve(tenant_id:str,data:dict,u=Depends(user)):
 @router.get('/api/public/plans')
 def public_plans():
     from .launch import signup_policy
-    with transaction() as db:return {**signup_policy(),'payment_collection_enabled':False,'plans':plan_list(db)}
+    from .email_verification import configuration
+    policy=signup_policy()
+    with transaction() as db:plans=plan_list(db)
+    if policy['signup_enabled'] and plans:
+        try:configuration()
+        except HTTPException as exc:
+            if exc.status_code!=503:raise
+            policy['signup_enabled']=False
+    else:policy['signup_enabled']=False
+    return {**policy,'payment_collection_enabled':False,'plans':plans}
 
 @router.post('/api/v2/billing/plan')
 def choose_plan(data:Subscription,u=Depends(user)):

@@ -18,9 +18,10 @@ class ServiceV2(unittest.TestCase):
     login=baseline.Acceptance.login
 
     def account(self,channel='whatsapp',asset='12345'):
-        self.login()
-        r=self.client.post('/api/v2/accounts',json={'channel':channel,'provider_id':asset,'label':'Test account','api_version':'v27.0'})
+        self.login('provider')
+        r=self.client.post('/api/admin/workspaces/a/integrations',json={'channel':channel,'provider_id':asset,'label':'Test account','api_version':'v27.0'})
         self.assertEqual(r.status_code,201,r.text); aid=r.json()['id']
+        self.login()
         os.environ['WASLA_CHANNEL_'+aid.upper()+'_TOKEN']='synthetic-test-only'
         with transaction() as db: db.execute("UPDATE service_accounts SET state='verified' WHERE id=?",(aid,))
         return aid

@@ -44,11 +44,12 @@ def queue(db,tid,requester,scope,accounts=None,data_accounts=None,source=None):
     userids=identifiers(db,'users','tenant_id',[tid]) if scope=='tenant' else [requester] if scope=='user' else []
     for user_id in userids:
         db.execute('UPDATE users SET active=0 WHERE id=?',(user_id,));remove(db,'sessions','user_id',[user_id])
+    local_replay=bool(source and source.startswith('restore:'))
     remote=[];objects=[]
     for aid in accounts:
         a=one(db,'SELECT * FROM service_accounts WHERE id=?',(aid,));saved=one(db,'SELECT ciphertext FROM service_secrets WHERE account_id=?',(aid,))
         if not a:continue
-        if saved:
+        if saved and not local_replay:
             target=a['provider_id']+'/subscribed_apps';host='graph.facebook.com';eligible=a['channel']=='messenger'
             if a['channel']=='messenger':
                 peer=one(db,"SELECT id FROM meta_data_connections WHERE kind='leads' AND provider_id=? AND state!='disconnected'",(a['provider_id'],))
@@ -60,23 +61,24 @@ def queue(db,tid,requester,scope,accounts=None,data_accounts=None,source=None):
                     eligible=set(peers).issubset(accounts);target=m['business_account_id']+'/subscribed_apps'
             if a['channel']=='instagram':host='graph.instagram.com';target='me/permissions';eligible=True
             remote.append({'host':host,'target':target,'version':a['api_version'],'token':unseal(saved['ciphertext']),'eligible':eligible})
-        identities=identifiers(db,'service_identities','account_id',[aid]);tickets=identifiers(db,'service_tickets','identity_id',identities)
-        objects+=identifiers(db,'service_media','ticket_id',tickets,field='object_key')
+        if not local_replay:
+            identities=identifiers(db,'service_identities','account_id',[aid]);tickets=identifiers(db,'service_tickets','identity_id',identities)
+            objects+=identifiers(db,'service_media','ticket_id',tickets,field='object_key')
         from .meta_lifecycle import disconnect_local
         disconnect_local(db,aid,'privacy_deletion')
         db.execute("UPDATE service_outbox SET state='blocked',error='privacy_deletion' WHERE state='retry' AND message_id IN (SELECT id FROM service_messages WHERE account_id=?)",(aid,))
     if data_accounts:
         for did in data_accounts:
             d=one(db,'SELECT * FROM meta_data_connections WHERE id=?',(did,))
-            if d and d['kind']=='leads' and d['ciphertext']:
+            if not local_replay and d and d['kind']=='leads' and d['ciphertext']:
                 remote.append({'host':'graph.facebook.com','target':d['provider_id']+'/subscribed_apps','version':d['api_version'],'token':unseal(d['ciphertext']),'eligible':True,'remove_fields':['leadgen'],'app_id':d['app_id']})
         db.execute("UPDATE meta_data_connections SET ciphertext='',state='disconnected' WHERE id IN ("+marks(data_accounts)+')',tuple(data_accounts))
     if scope=='tenant':
         db.execute("UPDATE channels SET status='disconnected',token_env='' WHERE tenant_id=?",(tid,))
         # External storage may include attachments not currently attached to an active account.
-        objects+=identifiers(db,'service_media','tenant_id',[tid],field='object_key')
+        if not local_replay:objects+=identifiers(db,'service_media','tenant_id',[tid],field='object_key')
     ident=uid();targets={'accounts':accounts,'data_accounts':data_accounts,'users':userids}
-    db.execute('INSERT INTO deletion_jobs(id,tenant_id,requester_id,scope,targets,remote_ciphertext,remote_status,created_at,source_key) VALUES(?,?,?,?,?,?,?,?,?)',(ident,tid,requester,scope,json.dumps(targets),cipher().encrypt(json.dumps(remote).encode()).decode() if remote else '', 'requires_meta_review' if data_accounts else 'pending',int(time.time()),source))
+    db.execute('INSERT INTO deletion_jobs(id,tenant_id,requester_id,scope,targets,remote_ciphertext,remote_status,created_at,source_key) VALUES(?,?,?,?,?,?,?,?,?)',(ident,tid,requester,scope,json.dumps(targets),cipher().encrypt(json.dumps(remote).encode()).decode() if remote else '', 'restore_local_only' if local_replay else 'requires_meta_review' if data_accounts else 'pending',int(time.time()),source))
     for key in set(objects):db.execute('INSERT INTO deletion_objects VALUES(?,?)',(ident,key))
     return ident
 
@@ -184,10 +186,15 @@ def purge(db,job,targets):
     remove(db,'audit','tenant_id',[tid]);remove(db,'retention_holds','entity_id',[tid]+ids)
     remove(db,'users','id',ids);remove(db,'tenants','id',[tid])
 
-def process_deletion():
+def process_deletion(job_id=None):
     clock=int(time.time())
     with transaction() as db:
-        job=one(db,"SELECT * FROM deletion_jobs WHERE state IN ('pending','retry','blocked_hold') AND next_attempt<=? ORDER BY created_at LIMIT 1"+(' FOR UPDATE SKIP LOCKED' if postgres() else ''),(clock,))
+        sql="SELECT * FROM deletion_jobs WHERE state IN ('pending','retry','blocked_hold') AND next_attempt<=?"
+        args=(clock,)
+        if job_id is not None:
+            sql+=' AND id=?'
+            args+=(job_id,)
+        job=one(db,sql+' ORDER BY created_at LIMIT 1'+(' FOR UPDATE SKIP LOCKED' if postgres() else ''),args)
         if not job:return False
         targets=json.loads(job['targets']);a=targets['accounts'];scopeids=a+targets['data_accounts']+targets['users']+([job['tenant_id']] if job['tenant_id'] else [])
         identities=identifiers(db,'service_identities','account_id',a);scopeids+=identities+identifiers(db,'service_tickets','identity_id',identities)
@@ -195,7 +202,12 @@ def process_deletion():
         scopeids+=identifiers(db,'meta_data_connections','id',targets['data_accounts'],field='tenant_id')
         # Holding the job row makes each phase exclusive. Operations are idempotent on crash.
         try:
-            remote=json.loads(unseal(job['remote_ciphertext'])) if job['remote_ciphertext'] else []
+            local_replay=(job['source_key'] or '').startswith('restore:') or job['remote_status']=='restore_local_only'
+            if local_replay:
+                # Covers replay jobs copied from releases before local-only replay.
+                db.execute("UPDATE deletion_jobs SET remote_ciphertext='',remote_status='restore_local_only' WHERE id=?",(job['id'],))
+                db.execute('DELETE FROM deletion_objects WHERE job_id=?',(job['id'],))
+            remote=json.loads(unseal(job['remote_ciphertext'])) if job['remote_ciphertext'] and not local_replay else []
             if remote:
                 target=remote.pop(0);result='requires_meta_review'
                 if target['eligible']:

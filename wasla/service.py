@@ -102,12 +102,17 @@ def normalize(channel, payload):
                     'body':msg.get('text','[مرفق أو نوع غير مدعوم؛ لم يُنزّل الملف]'),'direction':'out' if echo else 'in', 'media':next(({'url':x.get('payload',{}).get('url','')} for x in msg.get('attachments',[]) if channel=='instagram' and x.get('type')=='image'),None)}
     else: raise ValueError('unsupported_channel')
 
+# OAuth completion binds the asset before the optional live messaging check.
+INBOUND_ASSET = """(a.state='verified' OR (a.state='unverified' AND EXISTS
+    (SELECT 1 FROM meta_grants g WHERE g.account_id=a.id AND g.health='valid')))
+    AND (a.expires_at IS NULL OR a.expires_at=0 OR a.expires_at>?)"""
+
 def persist_events(channel, payload):
     events=list(normalize(channel,payload))
     if len(events)>500: raise HTTPException(413,'too_many_events')
     with transaction() as db:
         for asset,key,event in events:
-            account=one(db,"SELECT a.* FROM service_accounts a JOIN tenants t ON t.id=a.tenant_id WHERE a.channel=? AND a.provider_id=? AND t.status!='suspended' AND a.state!='disconnected'",(channel,asset))
+            account=one(db,"SELECT a.* FROM service_accounts a JOIN tenants t ON t.id=a.tenant_id WHERE a.channel=? AND a.provider_id=? AND t.status!='suspended' AND "+INBOUND_ASSET,(channel,asset,int(time.time())))
             if not account: raise HTTPException(403,'unknown_or_disconnected_account')
             if not event['id'] or len(event['id'])>300: raise HTTPException(400,'invalid_message_id')
             db.execute('INSERT INTO service_events(id,account_id,event_key,payload,received_at) VALUES(?,?,?,?,?) ON CONFLICT(account_id,event_key) DO NOTHING',
@@ -139,7 +144,7 @@ def process_event():
             event=one(db,"SELECT * FROM service_events WHERE state='pending' AND next_attempt<=? ORDER BY received_at,id LIMIT 1"+(' FOR UPDATE SKIP LOCKED' if postgres() else ''),(int(time.time()),))
             if not event: return False
             eid=event['id']; attempts=event['attempts']; e=json.loads(event['payload'])
-            a=one(db,"SELECT a.* FROM service_accounts a JOIN tenants t ON t.id=a.tenant_id WHERE a.id=? AND t.status!='suspended' AND a.state!='disconnected'"+(' FOR UPDATE OF a' if postgres() else ''),(event['account_id'],))
+            a=one(db,"SELECT a.* FROM service_accounts a JOIN tenants t ON t.id=a.tenant_id WHERE a.id=? AND t.status!='suspended' AND "+INBOUND_ASSET+(' FOR UPDATE OF a' if postgres() else ''),(event['account_id'],int(time.time())))
             if not a: raise ValueError('account_unavailable')
             aid=a['id']; tid=a['tenant_id']; clock=int(time.time())
             if e['type']=='status': apply_status(db,aid,e['id'],e['status'],e['at'])

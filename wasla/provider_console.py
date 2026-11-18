@@ -45,7 +45,7 @@ def scoped_provider(tenant_id,u):
     with transaction() as db:t=one(db,'SELECT * FROM tenants WHERE id=?',(tenant_id,))
     if not t:raise HTTPException(404,'workspace_not_found')
     # Explicit provider delegation only; never accept role/user/tenant objects from request JSON.
-    return {**u,'role':'admin','tenant_id':tenant_id}
+    return {**u,'role':'admin','tenant_id':tenant_id,'provider_delegated':True}
 
 @router.get('/api/admin/integrations')
 def overview(u=Depends(user)):
