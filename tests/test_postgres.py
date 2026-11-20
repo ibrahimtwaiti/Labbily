@@ -199,12 +199,22 @@ class PostgreSQLCompletion(unittest.TestCase):
                 return 200
             except HTTPException as e:return e.status_code
         with ThreadPoolExecutor(4) as pool:self.assertEqual(sorted(pool.map(reserve,range(4))),[200,429,429,429])
+    def test_literal_percent_and_bound_parameters(self):
+        with transaction() as db:
+            row=db.execute("SELECT ? AS arg, 'stage%' AS pattern, 7 % 3 AS remainder",('50%',)).fetchone()
+            self.assertEqual((row['arg'],row['pattern'],row['remainder']),('50%','stage%',1))
+            self.assertEqual(db.execute("SELECT 'restore:%'").fetchone()[0],'restore:%')
+        from scripts.deletion_ledger import export_ledger
+        self.assertEqual(export_ledger()['format'],'wasla-erasure-ledger-v1')
+
     def test_email_verification_single_use_under_concurrency(self):
         from wasla.email_verification import enqueue
         from wasla.service_oauth import cipher
         from wasla.db import one
         with transaction() as db:
-            db.execute('UPDATE users SET active=0 WHERE id=?',(self.user,));enqueue(db,self.user)
+            db.execute('UPDATE users SET active=0 WHERE id=?',(self.user,))
+            db.execute("INSERT INTO service_registrations VALUES(?,?,'pending','sandbox-v1','',?)",(self.tid,self.user,now()))
+            enqueue(db,self.user)
             token=json.loads(cipher().decrypt(one(db,'SELECT ciphertext FROM email_jobs WHERE user_id=?',(self.user,))['ciphertext'].encode()))['url'].split('#')[1]
         def verify(_):
             with TestClient(app) as client:return client.post('/api/auth/verification/complete',json={'token':token},headers={'Origin':'http://localhost:8000'}).status_code

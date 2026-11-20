@@ -38,7 +38,8 @@ def _pg_row(cursor):
 
 def _pg_sql(sql):
     # SQL is internally authored, never user controlled. Parameters stay bound.
-    sql = sql.replace('?', '%s')
+    # psycopg treats literal percent signs as placeholders even for an empty parameter tuple.
+    sql = sql.replace('%', '%%').replace('?', '%s')
     sql = re.sub(r'\bIS %s\b', 'IS NOT DISTINCT FROM %s', sql)
     sql = sql.replace('max(last_inbound,%s)', 'GREATEST(last_inbound,%s)')
     return sql

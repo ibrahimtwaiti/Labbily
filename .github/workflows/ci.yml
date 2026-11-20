@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt -r scripts/requirements-restore.txt
       - run: python -m compileall -q wasla scripts
       - run: node --check wasla/static/app.js
       - run: node --check wasla/static/service.js
@@ -54,7 +54,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt -r scripts/requirements-restore.txt
       - name: Migrations, PostgreSQL acceptance, isolation and concurrent worker
         env:
           DATABASE_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
@@ -66,13 +66,28 @@ jobs:
 
       - name: Restore V2 backup into a disposable database and compare every row
         env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
           PGPASSWORD: ci-disposable-only
           WASLA_TEST_DATABASE_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
           WASLA_RESTORE_TEST_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_restore_test
         run: |
           psql -h localhost -U wasla_test -d wasla_test -c 'CREATE DATABASE wasla_restore_test;'
           docker exec ${{ job.services.postgres.id }} pg_dump -U wasla_test -d wasla_test -Fc > /tmp/wasla-ci-restore.dump
-          docker exec -i ${{ job.services.postgres.id }} pg_restore -U wasla_test -d wasla_restore_test --no-owner < /tmp/wasla-ci-restore.dump
+          # Extract with the same client major as the source, execute with the runner's psql.
+          docker cp /tmp/wasla-ci-restore.dump "$PG_CONTAINER":/tmp/wasla-ci-restore.dump
+          mkdir -p "$RUNNER_TEMP/restore-bin"
+          cat >"$RUNNER_TEMP/restore-bin/pg_restore" <<'SH'
+          #!/bin/sh
+          exec docker exec "$PG_CONTAINER" pg_restore "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/restore-bin/pg_restore"
+          export PATH="$RUNNER_TEMP/restore-bin:$PATH" PGHOST=127.0.0.1 PGUSER=wasla_test PGDATABASE=wasla_restore_test
+          python -m scripts.restore_postgres /tmp/wasla-ci-restore.dump
+          python -m scripts.verify_restore
+          if python -m scripts.restore_postgres /tmp/wasla-ci-restore.dump; then
+            echo 'Restore accepted an occupied target' >&2
+            exit 1
+          fi
           python -m scripts.verify_restore
 
       - name: Exercise atomic SQLite to PostgreSQL import
