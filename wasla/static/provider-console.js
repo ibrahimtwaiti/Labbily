@@ -14,6 +14,9 @@ const secretField=(name,label)=>`<label class="field">${esc(label)}<input name="
 let providerWorkspace='';
 async function providerIntegrationsView(main){
  const [r,tenants]=await Promise.all([api('/admin/integrations'),api('/admin/tenants')]);
+ renderProviderIntegrations(main,r,tenants);
+}
+function renderProviderIntegrations(main,r,tenants){
  const list=r.accounts.filter(a=>!providerWorkspace||a.tenant_id===providerWorkspace);
  const verified=r.accounts.filter(a=>a.state==='verified').length;
  main.innerHTML=heading(sv('مركز الربط والمنصات','Integrations center'),sv('أضف الحسابات، اربطها بالشركات، واختبر اتصالها من مكان واحد.','Add accounts, assign workspaces and check connections in one place.'),button('integration-add',sv('إضافة حساب منصة','Add platform account')))+
@@ -24,7 +27,7 @@ async function providerIntegrationsView(main){
  ${list.length?table([sv('الحساب والشركة','Account and workspace'),sv('الحالة','Status'),sv('بيانات الاعتماد','Credentials'),sv('آخر نشاط','Last activity'),sv('الإدارة','Manage')],list.map(a=>`<tr><td><b>${esc(a.label)}</b><small>${esc(a.workspace_name)} · ${esc(a.channel)}</small></td><td>${ss(a.state)}</td><td>${a.credentials_configured?sv('محفوظة ومشفرة','Stored encrypted'):sv('تحتاج ربطًا','Setup required')}</td><td><small>${sv('وارد','Inbound')}: ${a.last_inbound_at?date(a.last_inbound_at):'—'}</small><small>${sv('صادر','Outbound')}: ${a.last_outbound_at?date(a.last_outbound_at):'—'}</small></td><td><button class="light small" data-integration="${a.id}">${sv('إدارة الربط','Manage connection')}</button></td></tr>`)):empty(sv('لا توجد حسابات في هذا العرض','No accounts in this view'),sv('أنشئ مساحة الشركة ثم أضف حساب المنصة واربطه بها.','Create a workspace, then add its platform account.'))}
  <section class="card"><h2>${sv('كيف يعمل الربط؟','Connection steps')}</h2><ol><li>${sv('اضبط تطبيقات المنصات مرة واحدة، واحفظ أسرارها داخل اللوحة.','Configure platform applications once and save their credentials here.')}</li><li>${sv('أضف حسابًا وحدد الشركة المالكة له.','Add an account and choose its owning workspace.')}</li><li>${sv('احفظ رمز الوصول أو ابدأ تفويض إنستغرام، ثم افحص الاتصال.','Save an access token or authorize Instagram, then check access.')}</li><li>${sv('أكمل موافقة المنصة واشتراك الأحداث، ثم تحقق من الوارد والصادر.','Complete platform approval and event subscriptions, then verify inbound and outbound traffic.')}</li></ol><p class="micro">${sv('حفظ الإعدادات يطبقها على الخادم مباشرة. تبقى موافقات Meta وTikTok وSnap في بواباتها الرسمية.','Saved settings apply on the server immediately. Platform approvals remain in the official Meta, TikTok and Snap portals.')}</p></section>
  <section id="integration-diagnostics-panel" aria-live="polite"></section><h2>${sv('آخر عمليات الإدارة','Recent administration activity')}</h2>${r.audit.length?table([sv('الإجراء','Action'),sv('التاريخ','Date')],r.audit.map(e=>`<tr><td>${esc(e.action.replace('provider.integration.',''))}</td><td>${date(e.created_at)}</td></tr>`)):empty(sv('لا توجد عمليات مسجلة بعد','No activity yet'))}`;
- main.querySelector('[name=workspace_filter]').onchange=e=>{providerWorkspace=e.target.value;providerIntegrationsView(main)};
+ main.querySelector('[name=workspace_filter]').onchange=e=>{providerWorkspace=e.target.value;renderProviderIntegrations(main,r,tenants)};
  main.querySelector('#integration-refresh').onclick=()=>providerIntegrationsView(main);
  main.querySelector('#integration-workspace').onclick=()=>providerWorkspaceSettings();
  main.querySelector('#integration-diagnostics').onclick=()=>providerDiagnostics();
@@ -42,6 +45,7 @@ async function providerWorkspaceSettings(){
  const path=providerScope();if(!path)return;
  try{
  const [c,agents,ret]=await Promise.all([api(path+'/integration-settings'),api(path+'/integration-agents'),api(path+'/retention')]);
+ if(currentView!=='integrations'||path!=='/admin/workspaces/'+providerWorkspace)return;
  const days=[['الاثنين','Monday'],['الثلاثاء','Tuesday'],['الأربعاء','Wednesday'],['الخميس','Thursday'],['الجمعة','Friday'],['السبت','Saturday'],['الأحد','Sunday']];
  const checks=(name,items,selected)=>`<div class="full provider-checks">${items.map(([id,label])=>`<label><input type="checkbox" name="${name}" value="${esc(String(id))}" ${selected.includes(id)?'checked':''}> ${esc(label)}</label>`).join('')}</div>`;
  modal(sv('إعدادات الشركة والتشغيل','Workspace operations'),

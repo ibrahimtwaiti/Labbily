@@ -3,7 +3,7 @@
 Jobs/tombstones contain identifiers and operational results only. No fake remote
 revocation is reported. Immutable backups expire under the separate 30-day policy.
 """
-import json,secrets,time
+import json,os,secrets,time
 from urllib.parse import parse_qs,urlparse
 import httpx
 from fastapi import Depends,HTTPException,Request
@@ -122,7 +122,8 @@ def retry(ident:str,u=Depends(user)):
 @router.post('/api/webhooks/meta/data-deletion')
 async def meta_delete(request:Request):
     from .meta_lifecycle import verify_signed_request
-    origin=value('WASLA_OAUTH_ORIGIN').rstrip('/');p=urlparse(origin)
+    # The privacy status page can be served on a separate public callback origin.
+    origin=(os.getenv('WASLA_DELETION_STATUS_ORIGIN') or value('WASLA_OAUTH_ORIGIN')).rstrip('/');p=urlparse(origin)
     if p.scheme!='https' or not p.hostname or p.path or p.query or p.fragment:raise HTTPException(503,'privacy_https_origin_required')
     if request.headers.get('content-type','').split(';')[0]!='application/x-www-form-urlencoded':raise HTTPException(415,'form_required')
     raw=await request.body()
