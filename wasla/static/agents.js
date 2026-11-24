@@ -87,6 +87,7 @@ async function agentStudioView(main,selected=null,tab='build'){
   root.innerHTML=cfg.sources.map((s,i)=>`<details class="source-row"><summary>${esc(s.title)}</summary><p>${esc(s.answer)}</p><button type="button" class="light" data-remove="${i}">${sv('إزالة من المسودة','Remove from draft')}</button></details>`).join('')+studioForm('agent-source',field('title',sv('سؤال معتمد','Approved question'))+area('answer',sv('الإجابة المعتمدة','Approved answer'))+area('aliases',sv('صيغ أخرى للسؤال، كل صيغة في سطر','Alternative questions, one per line'),'',false),sv('إضافة إلى المعرفة','Add to knowledge'));
   root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=studioActions(root,()=>save({...cfg,sources:cfg.sources.filter((_,i)=>i!==Number(el.dataset.remove))})));
   bindForm(root.querySelector('form'),d=>save({...cfg,sources:[...cfg.sources,{title:d.title,answer:d.answer,aliases:d.aliases.split('\n').map(x=>x.trim()).filter(Boolean)}]}));
+  await mountKnowledge(root,cfg,save,refresh);
  }else if(tab==='playground'){
   root.innerHTML=studioForm('agent-play',area('question',sv('رسالة المحاكاة','Simulated customer message'))+select('expected',sv('حفظ كحالة اختبار','Save as a test case'),[['',sv('تجربة فقط','Run once')],...agentOpts(['answer','review','handover','followup'])]),sv('اختبر المسودة','Test draft'))+'<output class="agent-preview" aria-live="polite"></output>'+a.scenarios.map(c=>`<p>${esc(c.question)} · ${aw(c.expected)} <button class="light small" data-case="${esc(c.id)}">${sv('إزالة','Remove')}</button></p>`).join('');
   bindForm(root.querySelector('form'),async d=>{const r=await send(base+'/playground','POST',{question:d.question,save:!!d.expected,expected:d.expected||null});if(d.expected)await refresh();const o=main.querySelector('.agent-preview');o.textContent=[aw(r.kind),r.answer,r.source,sv('زمن التنفيذ','Duration')+' '+r.elapsed_ms+' ms',sv('حالات الاختبار الناجحة','Saved scenarios passing')+': '+(r.scenarios_passed?'✓':'—')].filter(Boolean).join('\n')});
@@ -105,4 +106,31 @@ async function agentStudioView(main,selected=null,tab='build'){
   root.innerHTML=a.metrics.length?table([sv('النتيجة','Result'),sv('العدد','Count'),sv('متوسط المعالجة','Mean processing time')],a.metrics.map(m=>`<tr><td>${aw(m.result)}</td><td>${m.count}</td><td>${Math.round(m.mean_ms)} ms</td></tr>`)):empty(sv('لم يسجل الوكيل عمليات على القنوات بعد','No channel runs yet'));
   root.innerHTML+=a.activity.map(r=>`<p><bdi>${date(r.created_at)}</bdi> · v${r.version} · ${aw(r.result)}</p>`).join('');
  }
+}
+
+async function mountKnowledge(root,cfg,save,refresh){
+ const docs=await api('/v2/agent-knowledge');
+ const block=document.createElement('section');block.className='agent-library';root.append(block);
+ block.innerHTML=`<h3>${sv('مكتبة الشركة','Workspace library')}</h3>`+docs.map(d=>`<details class="source-row" data-doc="${esc(d.id)}"><summary>${esc(d.title)} · ${d.status==='approved'?sv('معتمد','Approved'):sv('قيد المراجعة','Needs review')}</summary><div></div></details>`).join('')+
+ studioForm('import-source',field('title',sv('عنوان المصدر','Source title'))+area('text',sv('نص المقالة','Article text'),'',false)+field('url',sv('أو رابط صفحة عامة','Or a public page URL'),'url','',false)+`<label class="field">${sv('أو ملف PDF أو Word أو نص حتى 1 MB','Or a PDF, Word or text file up to 1 MB')}<input type="file" name="attachment" accept=".pdf,.docx,.txt"></label>`,sv('استيراد للمراجعة','Import for review'));
+ block.querySelector('textarea').maxLength=18000;
+ for(const element of block.querySelectorAll('[data-doc]')){
+  element.ontoggle=async()=>{
+   const pane=element.querySelector('div');if(!element.open||pane.children.length)return;
+   try{
+    const doc=await api('/v2/agent-knowledge/'+element.dataset.doc);pane.innerHTML=`<pre class="document-preview">${esc(doc.content)}</pre>`;
+    const action=(txt,fn)=>{const b=document.createElement('button');b.type='button';b.className='light small';b.textContent=txt;b.onclick=studioActions(pane,fn);pane.append(b)};
+    if(doc.status!=='approved')action(sv('اعتماد النص المعروض','Approve this text'),async()=>{await send('/v2/agent-knowledge/'+doc.id+'/approve','POST',{checksum:doc.checksum});await refresh()});
+    const ids=cfg.document_ids||[];
+    if(doc.status==='approved'||ids.includes(doc.id))action(ids.includes(doc.id)?sv('فصل عن المسودة','Detach from draft'):sv('استخدام في المسودة','Use in draft'),()=>save({...cfg,document_ids:ids.includes(doc.id)?ids.filter(id=>id!==doc.id):[...ids,doc.id]}));
+    if(doc.source_url)action(sv('مزامنة الصفحة','Refresh page'),async()=>{await send('/v2/agent-knowledge/'+doc.id+'/refresh','POST',{});await refresh()});
+   }catch(e){pane.textContent=serviceError(e)}
+  };
+ }
+ const form=block.querySelector('#import-source');bindForm(form,async d=>{
+  const file=form.elements.attachment.files[0];
+  if(file&&file.size>1048576)throw Error(sv('حد الملف 1 MB','File limit is 1 MB'));
+  const encoded=file?await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.slice(r.result.indexOf(',')+1));r.onerror=no;r.readAsDataURL(file)}):'';
+  await send('/v2/agent-knowledge/import','POST',{title:d.title,text:d.text,url:d.url,filename:file?.name||'',encoded});await refresh();
+ });
 }

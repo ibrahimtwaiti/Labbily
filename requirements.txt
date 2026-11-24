@@ -2,6 +2,7 @@ fastapi==0.141.1
 starlette==1.6.0
 uvicorn==0.52.1
 httpx==0.28.1
+pypdf>=6.4,<8
 # Pinned transitive dependencies for reproducible V1 environments.
 pydantic==2.13.4
 pydantic-core==2.46.4

@@ -49,6 +49,16 @@ def decide(cfg, question):
         exact,_,source=scored[0]
         return {'kind':'answer' if exact else 'review','reason':'approved_source' if exact else 'partial_match',
                 'answer':source['answer'],'source':source['title']}
+    passages=[]
+    for document in cfg.get('documents',[]):
+        for chunk in document['chunks']:
+            tokens=set(normalized(chunk).split())
+            common=len(words & tokens)
+            if common>=2 and common/max(1,len(words))>=0.6:
+                passages.append((common/max(1,len(words))+common/max(1,len(tokens)),document['title'],chunk))
+    if passages:
+        _,title,chunk=max(passages)
+        return {'kind':'review','reason':'document_excerpt','answer':chunk,'source':title}
     return {'kind':'handover','reason':'no_reliable_source','answer':'','source':''}
 
 def deployment(db,tid,account):
@@ -107,7 +117,7 @@ def handle_inbound(db,account,ticket_id,message_id,body,stamp):
             if kind=='followup' and owner:
                 task_id=uid()
                 db.execute("INSERT INTO tasks(id,tenant_id,owner_id,title,due_at,status,created_at) VALUES(?,?,?,?,?,'open',?)",
-                           (task_id,tid,owner['id'],body[:180],now(),now()))
+                           (task_id,tid,owner['id'],'متابعة محادثة / Conversation follow-up',now(),now()))
             summary=('سبب التحويل / Reason: '+decision['reason']+'\n'+body[:700]+'\n'+
                      ('مهمة متابعة / Follow-up: '+task_id if task_id else 'الخطوة التالية / Next: مراجعة الموظف'))
             db.execute("""UPDATE service_tickets SET automation_paused=1,status='waiting_internal',summary=?,
