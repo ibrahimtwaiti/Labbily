@@ -1,5 +1,5 @@
 const {test,expect}=require('@playwright/test');
-test('workspace agent draft, source, simulation, publish and protected deployment',async({page})=>{
+test('workspace agent draft, source, simulation, publish and protected deployment',async({page},testInfo)=>{
  await page.goto('/login?lang=en');
  await page.locator('[name=email]').fill('service@example.test');
  await page.locator('[name=password]').fill('service-test-password');
@@ -21,6 +21,7 @@ test('workspace agent draft, source, simulation, publish and protected deploymen
  await page.locator('[name=expected]').selectOption('answer');
  await page.locator('#agent-play button[type=submit]').click();
  await expect(page.locator('.agent-preview')).toContainText('Open from nine to five.');
+ await testInfo.attach('agent-playground',{body:await page.screenshot(),contentType:'image/png'});
  await page.getByRole('button',{name:'Deploy',exact:true}).click();
  await page.locator('#agent-publish').click();
  await expect(page.locator('.agent-board')).toContainText('1 · Published');

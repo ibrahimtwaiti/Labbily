@@ -87,3 +87,22 @@ def update(data:Change,u=Depends(user)):
             db.execute('UPDATE service_tickets SET version=version+1,updated_at=? WHERE id=?',(clock,item.id))
             audit(db,u,'inbox.'+data.action,item.id)
     return {'updated':len(data.tickets)}
+
+@router.get('/api/v2/tickets/{ident}/customer-timeline')
+def customer_timeline(ident:str,u=Depends(user)):
+    permit(u,'inbox')
+    with transaction() as db:
+        ticket=get(db,'service_tickets',ident,u)
+        identity=get(db,'service_identities',ticket['identity_id'],u)
+        query='''SELECT m.direction,substr(m.body,1,180) AS excerpt,m.occurred_at,
+                        a.channel,t.id AS ticket_id,t.status
+                 FROM service_tickets t
+                 JOIN service_identities i ON i.id=t.identity_id AND i.tenant_id=t.tenant_id
+                 JOIN service_accounts a ON a.id=i.account_id AND a.tenant_id=t.tenant_id
+                 JOIN service_messages m ON m.ticket_id=t.id AND m.tenant_id=t.tenant_id
+                 WHERE t.tenant_id=? AND (i.id=? OR i.customer_id=?)'''
+        args=[u['tenant_id'],identity['id'],identity.get('customer_id') or None]
+        if u['role']=='sales':
+            query+=' AND t.assignee_id=?'
+            args.append(u['id'])
+        return rows(db,query+' ORDER BY m.occurred_at DESC,m.created_at DESC,m.id DESC LIMIT 40',args)

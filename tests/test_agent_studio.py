@@ -91,6 +91,17 @@ class AgentStudio(unittest.TestCase):
             self.assertEqual(one(db,'SELECT automation_paused FROM service_tickets')['automation_paused'],1)
             self.assertEqual(db.execute('SELECT runs FROM agent_usage').fetchone()[0],2)
 
+    def test_customer_timeline_visibility(self):
+        self.prepare_channel()
+        self.inbound('customer timeline')
+        ticket=self.client.get('/api/v2/tickets').json()[0]
+        timeline='/api/v2/tickets/'+ticket['id']+'/customer-timeline'
+        self.assertTrue(any(row['excerpt']=='customer timeline' for row in self.client.get(timeline).json()))
+        self.login('admin-b')
+        self.assertEqual(self.client.get(timeline).status_code,404)
+        self.login('sales-a')
+        self.assertEqual(self.client.get(timeline).status_code,403)
+
     def test_human_ownership_blocks_prepared_send(self):
         base=self.prepare_channel('auto')
         with patch('wasla.service.token',return_value='isolated-credential'):

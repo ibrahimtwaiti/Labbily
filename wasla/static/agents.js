@@ -24,7 +24,19 @@ function renderCustomerContext(main,t){
  <dl><dt>${sv('القناة','Channel')}</dt><dd>${esc(t.account.label||t.account.channel)}</dd><dt>${sv('الهوية على القناة','Channel identity')}</dt><dd><bdi>${esc(identity.provider_user_id)}</bdi></dd>
  ${contact?`<dt>${sv('هاتف موثق','Verified phone')}</dt><dd><bdi>${esc(contact.phone)}</bdi></dd><dt>${sv('التصنيفات','Tags')}</dt><dd>${esc(contact.tags||'—')}</dd>`:''}
  <dt>${sv('الفريق','Team')}</dt><dd>${esc(t.team||'—')}</dd></dl>${t.summary?`<p dir="auto">${esc(t.summary)}</p>`:''}
- ${(t.linked_tasks||[]).map(x=>`<p>${esc(x.title)} · ${esc(x.status)}</p>`).join('')}</details>`;
+ ${(t.linked_tasks||[]).map(x=>`<p>${esc(x.title)} · ${esc(x.status)}</p>`).join('')}</details><details id="contact-history"><summary>${sv('سجل المحادثات المرتبطة','Linked conversation history')}</summary><div role="status"></div></details>`;
+ const history=panel.querySelector('#contact-history');
+ let pending=false,loaded=false;
+ history.addEventListener('toggle',async()=>{
+  if(!history.open||pending||loaded)return;
+  const region=history.querySelector('[role=status]');
+  pending=true;region.textContent=sv('جارٍ تحميل السجل…','Loading history…');
+  try{
+   const events=await api('/v2/tickets/'+t.id+'/customer-timeline');
+   region.innerHTML=events.map(e=>`<article><strong>${esc(e.channel)} · ${e.direction==='note'?sv('ملاحظة داخلية','Internal note'):e.direction==='in'?sv('من العميل','From customer'):sv('من الفريق','From team')}</strong><p dir="auto">${esc(e.excerpt)}</p><small><bdi>${epoch(e.occurred_at)}</bdi></small></article>`).join('')||esc(sv('لا توجد رسائل مرتبطة بعد.','No linked messages yet.'));
+   loaded=true;
+  }catch(err){region.textContent=err.message;}finally{pending=false;}
+ });
 }
 function mountCopilot(form,t){
  const panel=document.createElement('details');panel.className='copilot';
