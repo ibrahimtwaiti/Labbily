@@ -70,5 +70,5 @@ def read(db):
                            if key not in legacy or str(value).casefold() != legacy[key].casefold()}}
 
 def css(b):
-    tokens={'brand':b['primary'],'brand-hover':'var(--ui-hover)','accent':b['secondary'],'ink':b['ink'],'paper':b['background'],'surface':b['surface'],'muted':b['muted'],'radius':str(b['radius'])+'px','logo-width':str(b['logo_width'])+'px','logo-padding':str(b['logo_padding'])+'px','font':b['font_ar']+', '+b['font_en']+', sans-serif','font-en':b['font_en']+', sans-serif','shadow':'0 16px 48px #0b0f140d' if b['shadow']=='soft' else 'none'}
+    tokens={'brand':b['primary'],'brand-hover':'var(--ui-hover)','accent':b['secondary'],'ink':b['ink'],'paper':b['background'],'surface':b['surface'],'muted':b['muted'],'radius':str(b['radius'])+'px','logo-width':str(b['logo_width'])+'px','logo-padding':str(b['logo_padding'])+'px','font':b['font_ar']+', '+b['font_en']+', sans-serif','font-en':b['font_en']+', "IBM Plex Sans Arabic", sans-serif','shadow':'0 16px 48px #0b0f140d' if b['shadow']=='soft' else 'none'}
     return ':root{'+''.join('--'+k+':'+v+';' for k,v in tokens.items())+'}'
