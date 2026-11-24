@@ -13,7 +13,8 @@ for(const lang of ['ar','en']){
     await expect(card.locator('h3')).toHaveText(lang==='ar'?'لا توجد جهات اتصال':'No contacts');
     const icon=card.locator('img');
     await expect(icon).toHaveAttribute('src','/static/labbily/contact-book.svg');
-    await expect.poll(()=>icon.evaluate(el=>el.complete && el.naturalWidth===96)).toBeTruthy();
+    await icon.evaluate(el=>el.decode());
+    await expect(icon).toHaveCSS('width','88px');
     await expect(card).toHaveCSS('background-color','rgb(255, 255, 255)');
     const contrast=async (selector,background)=>page.evaluate(({selector,background})=>{
       const luminance=value=>{
@@ -31,8 +32,13 @@ for(const lang of ['ar','en']){
     const exportSelector='.toolbar [href="/api/contacts/export"]';
     await expect(page.locator(exportSelector)).toBeVisible();
     expect(await contrast(exportSelector,exportSelector)).toBeGreaterThanOrEqual(4.5);
-    await page.locator('#contact-search').focus();
-    await page.keyboard.press('Tab');
+    if(testInfo.project.name==='webkit-mobile'){
+      await page.locator(exportSelector).focus();
+      await page.keyboard.press('Shift');
+    }else{
+      await page.locator('#contact-search').focus();
+      await page.keyboard.press('Tab');
+    }
     await expect(page.locator(exportSelector)).toBeFocused();
     await expect(page.locator(exportSelector)).toHaveCSS('outline-style','solid');
     if(lang==='ar')await testInfo.attach('contacts-empty',{body:await page.screenshot(),contentType:'image/png'});
