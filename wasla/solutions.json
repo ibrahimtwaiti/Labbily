@@ -3,7 +3,7 @@
     "id": "unified-inbox",
     "group": "service",
     "status": "limited",
-    "icon": "chat",
+    "icon": "messages",
     "related": [
       "team-management",
       "channel-api"
@@ -37,7 +37,7 @@
     "id": "automation",
     "group": "automation",
     "status": "limited",
-    "icon": "layers",
+    "icon": "automation",
     "related": [
       "unified-inbox",
       "team-management"
@@ -69,7 +69,7 @@
     "id": "channel-api",
     "group": "integrations",
     "status": "limited",
-    "icon": "link",
+    "icon": "api-connection",
     "related": [
       "unified-inbox",
       "integrations"
@@ -103,7 +103,7 @@
     "id": "ai-agents",
     "group": "automation",
     "status": "limited",
-    "icon": "chat",
+    "icon": "ai-assistant",
     "related": [
       "automation",
       "unified-inbox"
@@ -135,7 +135,7 @@
     "id": "crm",
     "group": "service",
     "status": "ready",
-    "icon": "people",
+    "icon": "contacts",
     "related": [
       "unified-inbox",
       "analytics"
@@ -169,7 +169,7 @@
     "id": "team-management",
     "group": "service",
     "status": "ready",
-    "icon": "people",
+    "icon": "team",
     "related": [
       "unified-inbox",
       "security"
@@ -203,7 +203,7 @@
     "id": "campaigns",
     "group": "marketing",
     "status": "planned",
-    "icon": "trend",
+    "icon": "campaigns",
     "related": [
       "analytics",
       "crm"
@@ -229,7 +229,7 @@
     "id": "analytics",
     "group": "marketing",
     "status": "ready",
-    "icon": "trend",
+    "icon": "analytics",
     "related": [
       "team-management",
       "unified-inbox"
@@ -263,7 +263,7 @@
     "id": "integrations",
     "group": "integrations",
     "status": "limited",
-    "icon": "link",
+    "icon": "integrations",
     "related": [
       "channel-api",
       "crm"
@@ -297,7 +297,7 @@
     "id": "security",
     "group": "governance",
     "status": "ready",
-    "icon": "check",
+    "icon": "security",
     "related": [
       "team-management",
       "integrations"
