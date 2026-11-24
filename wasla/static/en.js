@@ -330,6 +330,8 @@ window.WASLA_EN={
   "موافق": "Consented",
   "غير موافق / منسحب": "Not consented / withdrawn",
   "الموافقة": "Consent",
+  "لا توجد نتائج مطابقة": "No matching contacts",
+  "جرّب اسمًا أو رقم هاتف آخر.": "Try another name or phone number.",
   "لا توجد جهات اتصال": "No contacts",
   "أضف أول عميل. رقم الهاتف وحده لا يعني موافقة تسويقية.": "Add your first contact. A phone number alone is not marketing consent.",
   "موافقة": "Consent",
