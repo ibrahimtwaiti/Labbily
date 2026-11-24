@@ -132,13 +132,15 @@ def ticket(ident:str,u=Depends(user)):
     permit(u,'inbox')
     with transaction() as db:
         t=get(db,'service_tickets',ident,u)
-        t['messages']=rows(db,'SELECT * FROM service_messages WHERE ticket_id=? AND tenant_id=? ORDER BY created_at,id LIMIT 1000',(ident,u['tenant_id']))
+        t['messages']=rows(db,'''SELECT m.*,r.result AS agent_result,r.source_title AS agent_source FROM service_messages m LEFT JOIN agent_runs r ON r.note_id=m.id AND r.tenant_id=m.tenant_id WHERE m.ticket_id=? AND m.tenant_id=? ORDER BY m.created_at,m.id LIMIT 1000''',(ident,u['tenant_id']))
         t['identity']=get(db,'service_identities',t['identity_id'],u)
         a=get(db,'service_accounts',t['identity']['account_id'],u)
         t['account']={k:a[k] for k in ('id','channel','label','state')}
         t['reply_window_open']=int(time.time())-t['last_customer_at']<86400
         t['attachments']=rows(db,'SELECT id,mime_type,size_bytes,scan_state FROM service_media WHERE ticket_id=? AND tenant_id=?',(ident,u['tenant_id']))
         t['consents']=rows(db,'SELECT * FROM service_consents WHERE identity_id=? AND tenant_id=?',(t['identity_id'],u['tenant_id']))
+        t['contact']=one(db,'SELECT c.id,c.name,c.phone,c.tags FROM contacts c WHERE c.id=? AND c.tenant_id=?',(t['identity'].get('customer_id'),u['tenant_id']))
+        t['linked_tasks']=rows(db,'SELECT k.title,k.status,k.due_at FROM agent_runs r JOIN tasks k ON k.id=r.task_id AND k.tenant_id=r.tenant_id WHERE r.ticket_id=? AND r.tenant_id=? ORDER BY k.created_at DESC LIMIT 20',(ident,u['tenant_id']))
         return t
 
 @router.patch('/api/v2/tickets/{ident}')
