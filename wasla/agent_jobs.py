@@ -18,7 +18,7 @@ from . import agent_engine as e
 from .agent_api import Input, manager
 from .db import audit, one, rows, now, postgres, transaction, uid
 from .main import user
-from .service_api import router
+from .service_api import get, router
 from .service_oauth import cipher, unseal
 
 class Connection(Input):
