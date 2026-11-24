@@ -14,11 +14,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Request, Response, HTTPException, Depends
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from .db import initialize, transaction, one, rows, audit, now, uid, postgres
 from .security import hash_password, verify_password, digest, permit, limit, ROLES
-from .catalog import SERVICES, CONSENT
+from .catalog import SERVICES, CONSENT, REQUESTABLE_IDS, LEGACY_REDIRECTS, RETIRED_IDS
 from .catalog_en import SERVICES_EN, CONSENT_EN
 from .legal import DEFAULT_LEGAL_CONTENT
 from . import brand
@@ -180,7 +180,7 @@ def submit_request(data:dict,request:Request):
     key=operation(request)
     normalized={k:text(data,k,1,n) for k,n in [('name',100),('company',160),('country',80),('activity',160),('need',2000)]}
     normalized.update(phone=phone(text(data,'phone')),email=email(text(data,'email',0,200)),
-        service=choice(data,'service',{s['id'] for s in SERVICES}),source=text(data,'source',0,300))
+        service=text(data,'service',1,100),source=text(data,'source',0,300))
     if data.get('contact_consent') is not True: raise HTTPException(422,'موافقة التواصل بخصوص الخدمة مطلوبة')
     normalized['marketing_consent']=data.get('marketing_consent') is True
     payload_hash=digest(json.dumps(normalized,sort_keys=True))
@@ -189,6 +189,8 @@ def submit_request(data:dict,request:Request):
         if existing:
             if existing['payload_hash']!=payload_hash: raise HTTPException(409,'استخدم معرف عملية جديدًا للطلب المعدل')
             return {'reference':existing['reference']}
+        if normalized['service'] not in REQUESTABLE_IDS:
+            raise HTTPException(422, 'الحل المحدد غير متاح للطلب')
         limit(db,'request:'+digest(request.client.host),5,600)
         owner=one(db,"SELECT id FROM users WHERE role='provider' AND active=1 ORDER BY created_at LIMIT 1")
         if not owner: raise HTTPException(503,'استقبال الطلبات لم يُفعّل بعد؛ يرجى المحاولة لاحقًا')
@@ -599,9 +601,9 @@ def robots():
     return 'User-agent: *\nDisallow: /app\nDisallow: /api/\nDisallow: /setup\nDisallow: /login\n'+('Sitemap: '+origin+'/sitemap.xml\n' if origin.startswith('https://') else '')
 
 @app.get('/sitemap.xml')
-def sitemap():
-    origin=os.getenv('WASLA_ORIGIN','').rstrip('/')
-    paths=['/','/services','/platform','/how-it-works','/about','/faq','/request','/privacy','/terms']+['/services/'+s['id'] for s in SERVICES]
+def sitemap(request:Request):
+    origin=(os.getenv('WASLA_ORIGIN') or str(request.base_url)).rstrip('/')
+    paths=['/','/services','/platform','/how-it-works','/about','/faq','/pricing','/request','/privacy','/terms']+['/services/'+s['id'] for s in SERVICES]
     urls=''.join('<url><loc>'+html.escape(origin+p+suffix)+'</loc></url>' for p in paths for suffix in ['', '?lang=en'])
     return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls+'</urlset>',media_type='application/xml')
 
@@ -617,11 +619,31 @@ def shell(path:str,request:Request):
     lang=request.query_params.get('lang',request.cookies.get('wasla_lang','ar'))
     en=lang=='en'; source=(STATIC/'index.html').read_text()
     if en:
-        source=source.replace('lang="ar" dir="rtl"','lang="en" dir="ltr"').replace('وصلة | Wasla','Wasla | Connected sales and teams').replace('جارٍ تحميل وصلة…','Loading Wasla…').replace('انتقل للمحتوى','Skip to content')
+        source=source.replace('lang="ar" dir="rtl"','lang="en" dir="ltr"').replace('وصلة | Wasla','Wasla | Conversations and automation').replace('جارٍ تحميل وصلة…','Loading Wasla…').replace('انتقل للمحتوى','Skip to content')
+    catalog_items = SERVICES_EN if en else SERVICES
+    service_id = path.removeprefix('services/') if path.startswith('services/') else None
+    solution = next((item for item in catalog_items if item['id'] == service_id), None)
+    if service_id in LEGACY_REDIRECTS:
+        suffix = '?' + request.url.query if request.url.query else ''
+        return RedirectResponse(LEGACY_REDIRECTS[service_id] + suffix, status_code=301)
+    if solution or path == 'services':
+        title = solution['name'] if solution else ('Our solutions' if en else 'حلولنا')
+        description = solution['summary'] if solution else (
+            'Explore conversation management, automation and customer service solutions.' if en
+            else 'استكشف حلول إدارة المحادثات والأتمتة وخدمة العملاء واختر ما يناسب فريقك.'
+        )
+        origin = (os.getenv('WASLA_ORIGIN') or str(request.base_url)).rstrip('/')
+        canonical = html.escape(f"{origin}/{path}" + ("?lang=en" if en else ""), quote=True)
+        title, description = html.escape(title), html.escape(description, quote=True)
+        source = re.sub(r'<title>.*?</title>', f'<title>{title}</title>', source, count=1)
+        for attribute, value in [('name="description"', description), ('property="og:title"', title),
+                                 ('property="og:description"', description)]:
+            source = re.sub(fr'<meta {attribute} content="[^"]*">', f'<meta {attribute} content="{value}">', source)
+        source = source.replace('</head>', f'<link rel="canonical" href="{canonical}"></head>')
     private=path.startswith('app') or path in {'login','setup'}
     known=path in {'','services','platform','how-it-works','about','faq','pricing','privacy','terms','request','login','setup','signup','verify-email','deletion-status'} or path.startswith('app/') or path=='app' or path in {'services/'+s['id'] for s in SERVICES}
     if private or not known: source=source.replace('</head>','<meta name="robots" content="noindex,nofollow"></head>')
-    return HTMLResponse(source,status_code=200 if known else 404,headers={'Cache-Control':'no-store','Vary':'Cookie'})
+    return HTMLResponse(source,status_code=410 if service_id in RETIRED_IDS else (200 if known else 404),headers={'Cache-Control':'no-store','Vary':'Cookie'})
 
 # Never reflect OAuth codes or registration PINs in Pydantic error payloads.
 from fastapi.exceptions import RequestValidationError

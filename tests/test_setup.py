@@ -37,8 +37,10 @@ class SetupAcceptance(unittest.TestCase):
     def test_english_catalog_preserves_ids_and_scope(self):
         ar=self.client.get('/api/catalog').json();en=self.client.get('/api/catalog?lang=en').json()
         self.assertEqual([s['id'] for s in ar['services']],[s['id'] for s in en['services']])
-        self.assertEqual(en['services'][0]['name'],'WhatsApp sales management')
-        self.assertIn('not enabled in V1',en['services'][3]['limit'])
+        self.assertEqual(en['services'][0]['name'],'Unified inbox')
+        assistant = next(s for s in en['services'] if s['id'] == 'ai-agents')
+        self.assertEqual(assistant['status'], 'limited')
+        self.assertIn('Autonomous agents and generative replies are planned.', assistant['scope'])
 
     def test_private_routes_not_indexed_and_unknown_returns_404(self):
         self.assertIn('noindex,nofollow',self.client.get('/setup').text)

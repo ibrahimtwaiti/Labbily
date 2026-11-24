@@ -27,3 +27,15 @@ html[dir=ltr] .product-scene{direction:ltr}
 html[dir=ltr] .brand-hero .hero-copy{min-width:0}
 
 .policy-custom{white-space:pre-wrap}
+
+.solution-card { display: flex; flex-direction: column; align-items: flex-start; }
+.solution-card[hidden] { display: none; }
+.solution-card-top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; width: 100%; }
+.solution-card .card-link { margin-block-start: auto; }
+.solution-card-top .tile-icon { margin: 0; }
+.solution-status { font-size: .85rem; font-weight: 700; color: var(--ink); background: var(--bg, #f5f3ff); border: 1px solid var(--line); padding: .2rem .7rem; border-radius: 2rem; }
+.solution-filters button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.solution-filters button:focus-visible, .solution-card a:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.solution-breadcrumb { padding-block-start: 1.5rem; }
+@media (min-width: 601px) and (max-width: 1000px) { .solution-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .solution-grid { grid-template-columns: minmax(0, 1fr); } }
