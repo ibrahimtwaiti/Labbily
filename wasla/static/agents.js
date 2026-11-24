@@ -3,7 +3,7 @@ const studioLabel=sv('وكلاء الذكاء الاصطناعي','AI agents');
 for(const role of ['admin','supervisor']) menus[role].splice(2,0,['agents',studioLabel,'✦']);
 menus.provider.push(['agentpolicy',sv('إتاحة الوكلاء','Agent access'),'✦']);
 const agentWords={
- actions:['الأدوات','Actions'],order:['استعلام عن طلب','Order lookup'],availability:['المواعيد المتاحة','Appointment availability'],pending:['قيد المعالجة','Processing'],canceled:['ألغي بعد تغيّر المحادثة','Canceled after ownership change'],rules:['الأتمتة','Automation'],draft:['مسودة','Draft'],published:['منشور','Published'],paused:['متوقف','Paused'],archived:['مؤرشف','Archived'],
+ webhook:['إجراء خارجي بموافقة','Webhook with human approval'],actions:['الأدوات','Actions'],order:['استعلام عن طلب','Order lookup'],availability:['المواعيد المتاحة','Appointment availability'],pending:['قيد المعالجة','Processing'],canceled:['ألغي بعد تغيّر المحادثة','Canceled after ownership change'],rules:['الأتمتة','Automation'],draft:['مسودة','Draft'],published:['منشور','Published'],paused:['متوقف','Paused'],archived:['مؤرشف','Archived'],
  answer:['إجابة موثقة','Grounded answer'],review:['مطابقة تحتاج مراجعة','Review match'],handover:['تحويل للموظف','Human handover'],followup:['متابعة بشرية','Follow-up'],
  auto_queued:['رد الوكيل','Agent reply'],suggestion:['مسودة الوكيل','Agent suggestion'],internal:['ملاحظة الوكيل','Agent note'],
  suggest:['اقتراح للمراجعة','Suggested reply'],auto:['رد آلي','Automatic reply'],hybrid:['رد وتحويل','Hybrid'],build:['دليل العمل','Playbook'],
@@ -63,7 +63,8 @@ async function agentStudioView(main,selected=null,tab='build'){
  main.innerHTML=heading(studioLabel,sv('أنشئ دليل العمل، اختبر الإجابات، ثم اختر قناة التشغيل.','Build a playbook, test its answers, then select a channel.'),studioButton('agent-new',sv('إنشاء وكيل','Create agent'),false))+
  `<div class="agent-shell"><aside class="agent-list"><p>${sv('عمليات هذا الشهر','Runs this month')} <bdi>${list.usage.runs} / ${list.policy.monthly_runs}</bdi></p>${list.agents.map(x=>`<button type="button" class="agent-item ${x.id===selected?'selected':''}" data-agent="${esc(x.id)}"><strong>${esc(x.name)}</strong><small>${aw(x.state)}${x.published?' · v'+x.published:''}</small></button>`).join('')}</aside>
  <section class="agent-board"><div id="agent-body"></div></section></div>`;
- const refresh=(id=selected,key=tab)=>agentStudioView(main,id,key);
+ let flushBuild=null;
+ const refresh=async(id=selected,key=tab)=>{if(flushBuild)await flushBuild();await agentStudioView(main,id,key)};
  const click=(id,fn)=>{main.querySelector('#'+id).onclick=studioActions(main,fn)};
  click('agent-new',async()=>{
   const root=main.querySelector('#agent-body');
@@ -82,7 +83,7 @@ async function agentStudioView(main,selected=null,tab='build'){
  const save=async value=>{await send(base,'PUT',{revision:a.revision,config:value});await refresh()};
  if(tab==='build'){
   root.innerHTML=studioForm('agent-build',field('name',sv('اسم الوكيل','Agent name'),'text',cfg.name)+area('instructions',sv('تعليمات الصياغة للمساعد','Copilot editorial playbook'),cfg.instructions,false)+select('language',sv('اللغة','Language'),[['auto',sv('لغة العميل','Customer language')],['ar','العربية'],['en','English']],cfg.language)+select('tone',sv('النبرة','Tone'),[['professional',sv('مهنية','Professional')],['friendly',sv('ودية','Friendly')],['concise',sv('مختصرة','Concise')]],cfg.tone)+area('terms',sv('عبارات التحويل للموظف، كل عبارة في سطر','Handover phrases, one per line'),cfg.handover_terms.join('\n'),false)+select('follow',sv('إنشاء مهمة عند طلب المتابعة','Create a task when follow-up is requested'),[['0',sv('معطل','Off')],['1',sv('مسموح','Allowed')]],String(Number(cfg.tools.includes('followup')))),sv('حفظ المسودة','Save draft'));
-  bindForm(root.querySelector('form'),d=>save({...cfg,name:d.name,instructions:d.instructions,language:d.language,tone:d.tone,handover_terms:d.terms.split('\n').map(x=>x.trim()).filter(Boolean),tools:[...cfg.tools.filter(k=>k!=='followup'),...(d.follow==='1'?['followup']:[])]}));
+  flushBuild=wirePlaybook(root.querySelector('form'),cfg,a.revision,base);
  }else if(tab==='knowledge'){
   root.innerHTML=cfg.sources.map((s,i)=>`<details class="source-row"><summary>${esc(s.title)}</summary><p>${esc(s.answer)}</p><button type="button" class="light" data-remove="${i}">${sv('إزالة من المسودة','Remove from draft')}</button></details>`).join('')+studioForm('agent-source',field('title',sv('سؤال معتمد','Approved question'))+area('answer',sv('الإجابة المعتمدة','Approved answer'))+area('aliases',sv('صيغ أخرى للسؤال، كل صيغة في سطر','Alternative questions, one per line'),'',false),sv('إضافة إلى المعرفة','Add to knowledge'));
   root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=studioActions(root,()=>save({...cfg,sources:cfg.sources.filter((_,i)=>i!==Number(el.dataset.remove))})));
@@ -93,7 +94,7 @@ async function agentStudioView(main,selected=null,tab='build'){
  }else if(tab==='rules'){
   await renderRules(root,cfg,save);
  }else if(tab==='playground'){
-  root.innerHTML=studioForm('agent-play',area('question',sv('رسالة المحاكاة','Simulated customer message'))+select('channel',sv('قناة المحاكاة','Simulated channel'),['whatsapp','instagram','messenger'])+select('language',sv('لغة المحاكاة','Test language'),['ar','en'])+select('priority',sv('أولوية المحاكاة','Test priority'),['normal','low','high','urgent'])+select('expected',sv('حفظ كحالة اختبار','Save as a test case'),[['',sv('تجربة فقط','Run once')],...agentOpts(['answer','review','handover','followup','availability','order'])]),sv('اختبر المسودة','Test draft'))+'<output class="agent-preview" aria-live="polite"></output>'+a.scenarios.map(c=>`<p>${esc(c.question)} · ${aw(c.expected)} <button class="light small" data-case="${esc(c.id)}">${sv('إزالة','Remove')}</button></p>`).join('');
+  root.innerHTML=studioForm('agent-play',area('question',sv('رسالة المحاكاة','Simulated customer message'))+select('channel',sv('قناة المحاكاة','Simulated channel'),['whatsapp','instagram','messenger'])+select('language',sv('لغة المحاكاة','Test language'),['ar','en'])+select('priority',sv('أولوية المحاكاة','Test priority'),['normal','low','high','urgent'])+select('expected',sv('حفظ كحالة اختبار','Save as a test case'),[['',sv('تجربة فقط','Run once')],...agentOpts(['answer','review','handover','followup','availability','order','webhook'])]),sv('اختبر المسودة','Test draft'))+'<output class="agent-preview" aria-live="polite"></output>'+a.scenarios.map(c=>`<p>${esc(c.question)} · ${aw(c.expected)} <button class="light small" data-case="${esc(c.id)}">${sv('إزالة','Remove')}</button></p>`).join('');
   bindForm(root.querySelector('form'),async d=>{const r=await send(base+'/playground','POST',{...d,save:!!d.expected,expected:d.expected||null});if(d.expected)await refresh();const o=main.querySelector('.agent-preview');o.textContent=[aw(r.kind),r.answer,r.source,sv('زمن التنفيذ','Duration')+' '+r.elapsed_ms+' ms',sv('حالات الاختبار الناجحة','Saved scenarios passing')+': '+(r.scenarios_passed?'✓':'—')].filter(Boolean).join('\n')});
   root.querySelectorAll('[data-case]').forEach(el=>el.onclick=studioActions(root,async()=>{await send(base+'/scenarios/'+el.dataset.case,'DELETE',{});await refresh()}));
  }else if(tab==='deploy'){
@@ -103,6 +104,7 @@ async function agentStudioView(main,selected=null,tab='build'){
   main.querySelector('#agent-publish').disabled=a.tested_revision!==a.revision||a.state==='archived';
   click('agent-publish',async()=>{await send(base+'/publish','POST',{revision:a.revision});await refresh()});
   for(const action of ['pause','archive'])click('agent-'+action,async()=>{await send(base+'/state','POST',{action,revision:a.revision});await refresh()});
+  if(root.querySelector('#agent-restore')){const preview=document.createElement('details');preview.innerHTML='<summary>'+sv('مقارنة بالمسودة','Compare with draft')+'</summary><pre class="document-preview"></pre>';root.querySelector('#agent-restore').after(preview);preview.ontoggle=async()=>{if(!preview.open)return;try{const v=root.querySelector('#agent-restore select').value;const diff=await api(base+'/versions/'+v);preview.querySelector('pre').textContent=Object.keys(diff).length?JSON.stringify(diff,null,2):sv('لا توجد اختلافات','No differences')}catch(e){preview.querySelector('pre').textContent=serviceError(e)}}}
   if(root.querySelector('#agent-restore'))bindForm(root.querySelector('#agent-restore'),async d=>{await send(base+'/state','POST',{action:'restore',version:Number(d.version),revision:a.revision});await refresh(selected,'build')});
   if(root.querySelector('#agent-route'))bindForm(root.querySelector('#agent-route'),async d=>{await send(base+'/deployment','PUT',d);await refresh()});
   root.querySelectorAll('[data-unbind]').forEach(el=>el.onclick=studioActions(root,async()=>{await send(base+'/deployment/'+el.dataset.unbind,'DELETE',{});await refresh()}));
@@ -119,8 +121,11 @@ function scopeMatches(t,scope){
 function addInboxControls(main,data,views,list,open){
  const toolbar=main.querySelector('.service-toolbar');
  const controls=document.createElement('div');controls.className='service-toolbar inbox-filters';toolbar.after(controls);
+ const widths=document.createElement('details');widths.className='inbox-widths';widths.innerHTML='<summary>'+sv('عرض الأعمدة','Column widths')+'</summary><label>'+sv('القائمة','List')+'<input type="range" min="170" max="320" value="225" name="list"></label><label>'+sv('ملف العميل','Customer profile')+'<input type="range" min="155" max="260" value="195" name="profile"></label>';toolbar.after(widths);
+ for(const range of widths.querySelectorAll('input')){const key='labbily-inbox-'+range.name;try{range.value=localStorage.getItem(key)||range.value}catch{}const resize=()=>main.querySelector('.service-workspace').style.setProperty('--inbox-'+range.name,Number(range.value)+'px');resize();range.oninput=()=>{resize();try{localStorage.setItem(key,range.value)}catch{}}}
  const scopeOptions=[['all',sv('الكل','All')],['unread',sv('غير مقروء','Unread')],['unassigned',sv('غير مسند','Unassigned')],['human',sv('للموظفين','Human-owned')],['snoozed',sv('مؤجل','Snoozed')]];
  controls.innerHTML=select('scope',sv('العرض','View'),scopeOptions)+select('saved_view',sv('فلاتري','My filters'),[['','—'],...views.map(v=>[v.id,v.name])])+studioButton('save-inbox-view',sv('حفظ الفلتر','Save filter'))+(me.role!=='sales'?studioButton('inbox-bulk',sv('إجراء جماعي','Bulk action')):'');
+ main.querySelector('#service-search').oninput=list;main.querySelector('#service-state').onchange=list;
  const scope=controls.querySelector('[name=scope]'),saved=controls.querySelector('[name=saved_view]');scope.onchange=list;
  saved.onchange=()=>{const v=views.find(v=>v.id===saved.value);if(v){main.querySelector('#service-search').value=v.criteria.query;main.querySelector('#service-state').value=v.criteria.status;scope.value=v.criteria.scope;list()}};
  controls.querySelector('#save-inbox-view').onclick=()=>modal(sv('حفظ فلتر','Save filter'),field('name',sv('اسم الفلتر','Filter name')),d=>send('/v2/inbox-views','POST',{name:d.name,criteria:{scope:scope.value,status:main.querySelector('#service-state').value,query:main.querySelector('#service-search').value}}));
@@ -145,7 +150,7 @@ function inboxTicketActions(main,t){
 async function renderRules(root,cfg,save){
  const rules=cfg.rules||[];
  const fields=[['text',sv('نص الرسالة','Message contains')],['channel',sv('القناة','Channel')],['language',sv('اللغة','Language')],['priority',sv('الأولوية','Priority')]];
- const actions=[['knowledge',aw('knowledge')],...agentOpts(['handover','followup','availability','order'])];
+ const actions=[['knowledge',aw('knowledge')],...agentOpts(['handover','followup','availability','order','webhook'])];
  root.innerHTML=`<p>${sv('تُقيَّم القواعد بالترتيب عند وصول الرسالة. اسحب لتغيير الترتيب أو استخدم الأسهم.','Rules run in order on incoming messages. Drag or use the arrows to reorder.')}</p>`+rules.map((r,i)=>`<div draggable="true" data-rule="${i}" class="rule-block"><strong>${esc(fields.find(f=>f[0]===r.field)?.[1])} · ${esc(r.value)}</strong><span>↳ ${aw(r.action)} · ${sv('وإلا','Else')} ${r.otherwise==='continue'?sv('القاعدة التالية','Next rule'):aw(r.otherwise)}</span><div><button class="light small" data-move="-1" aria-label="${sv('أعلى','Move up')}" ${i===0?'disabled':''}>↑</button><button class="light small" data-move="1" aria-label="${sv('أسفل','Move down')}" ${i===rules.length-1?'disabled':''}>↓</button><button class="light small" data-remove-rule>${sv('إزالة','Remove')}</button></div></div>`).join('')+
  studioForm('rule-form',select('field',sv('إذا كان','If'),fields)+field('value',sv('القيمة','Value'))+select('action',sv('نفّذ','Then'),actions)+select('otherwise',sv('وإلا','Else'),[['continue',sv('القاعدة التالية','Next rule')],...agentOpts(['knowledge','handover'])]),sv('إضافة قاعدة للمسودة','Add draft rule'));
  const move=(i,j)=>{if(i===j||j<0||j>=rules.length)return;const next=[...rules];next.splice(j,0,...next.splice(i,1));return save({...cfg,rules:next})};
@@ -158,14 +163,36 @@ async function renderRules(root,cfg,save){
  bindForm(root.querySelector('form'),r=>save({...cfg,rules:[...rules,r]}));
 }
 async function agentToolsView(root,cfg,save,refresh){
- const connections=await api('/v2/agent-connections');
+ const [connections,approvals]=await Promise.all([api('/v2/agent-connections'),api('/v2/agent-approvals')]);
  const yesno=[['0',sv('معطل','Off')],['1',sv('مسموح','Allowed')]];
- root.innerHTML=studioForm('allowed-tools',select('model_routing',sv('استخدام النموذج المعتمد لمطابقة الأسئلة غير المعروفة','Use the approved model to match unfamiliar questions'),yesno,String(Number(!!cfg.model_routing)))+['followup','availability','order'].map(k=>select(k,aw(k),yesno,String(Number(cfg.tools.includes(k))))).join(''),sv('حفظ صلاحيات المسودة','Save draft permissions'))+
+ root.innerHTML=studioForm('allowed-tools',select('model_routing',sv('استخدام النموذج المعتمد لمطابقة الأسئلة غير المعروفة','Use the approved model to match unfamiliar questions'),yesno,String(Number(!!cfg.model_routing)))+['followup','availability','order','webhook'].map(k=>select(k,aw(k),yesno,String(Number(cfg.tools.includes(k))))).join(''),sv('حفظ صلاحيات المسودة','Save draft permissions'))+
  `<h3>${sv('الأنظمة المرتبطة بالشركة','Workspace connections')}</h3>`+connections.map(c=>`<p><strong>${aw(c.kind)}</strong> · <bdi>${esc(c.endpoint)}</bdi> ${me.role==='admin'?`<button type="button" class="light" data-disconnect="${esc(c.kind)}">${sv('فصل','Disconnect')}</button>`:''}</p>`).join('')+
- (me.role==='admin'?studioForm('connect-tool',select('kind',sv('نوع الاستعلام','Lookup type'),agentOpts(['availability','order']))+field('endpoint',sv('رابط واجهة القراءة HTTPS','Read-only HTTPS endpoint'),'url')+`<label class="field">${sv('رمز الوصول، إن تطلبه النظام','Bearer token, if required')}<input type="password" autocomplete="off" name="token"></label>`,sv('حفظ الاتصال','Save connection')):'');
- bindForm(root.querySelector('#allowed-tools'),d=>save({...cfg,model_routing:d.model_routing==='1',tools:['followup','availability','order'].filter(k=>d[k]==='1')}));
+ (me.role==='admin'?studioForm('connect-tool',select('kind',sv('نوع الاستعلام','Lookup type'),agentOpts(['availability','order','webhook']))+field('endpoint',sv('رابط واجهة القراءة HTTPS','Read-only HTTPS endpoint'),'url')+`<label class="field">${sv('رمز القراءة أو مفتاح توقيع Webhook','Read token or webhook signing secret')}<input type="password" autocomplete="off" name="token"></label>`,sv('حفظ الاتصال','Save connection')):'');
+ const queue=document.createElement('div');root.append(queue);
+ if(approvals.length)queue.innerHTML='<h3>'+sv('موافقات الإجراءات','Action approvals')+'</h3>'+approvals.map(j=>`<div class="source-row"><b>${esc(j.name)}</b> · ${aw('webhook')} · <bdi>${esc(j.ticket_id)}</bdi><p>${esc(connections.find(c=>c.kind==='webhook')?.endpoint||'—')}</p>${j.state==='approval'?'<button class="light" data-yes="'+esc(j.id)+'">'+sv('موافقة على الإرسال','Approve dispatch')+'</button><button class="light" data-no="'+esc(j.id)+'">'+sv('رفض','Decline')+'</button>':sv('الحصيلة غير مؤكدة؛ راجع النظام المستلم','Outcome unknown. Reconcile with the receiver.')}</div>`).join('');
+ queue.querySelectorAll('button').forEach(b=>b.onclick=studioActions(queue,async()=>{await send('/v2/agent-approvals/'+(b.dataset.yes||b.dataset.no),'POST',{approve:!!b.dataset.yes});await refresh()}));
+ bindForm(root.querySelector('#allowed-tools'),d=>save({...cfg,model_routing:d.model_routing==='1',tools:['followup','availability','order','webhook'].filter(k=>d[k]==='1')}));
  if(root.querySelector('#connect-tool'))bindForm(root.querySelector('#connect-tool'),async d=>{await send('/v2/agent-connections/'+d.kind,'PUT',{endpoint:d.endpoint,token:d.token});await refresh()});
  root.querySelectorAll('[data-disconnect]').forEach(b=>b.onclick=studioActions(root,async()=>{await send('/v2/agent-connections/'+b.dataset.disconnect,'DELETE',{});await refresh()}));
+}
+function wirePlaybook(form,initial,revision,base){
+ const out=document.createElement('small');out.setAttribute('role','status');form.append(out);
+ let timer,saving=Promise.resolve(),signature=null;
+ const collect=()=>{const d=formData(form);return {...initial,name:d.name,instructions:d.instructions,language:d.language,tone:d.tone,handover_terms:d.terms.split('\n').map(x=>x.trim()).filter(Boolean),tools:[...initial.tools.filter(k=>k!=='followup'),...(d.follow==='1'?['followup']:[])]}};
+ signature=JSON.stringify(collect());
+ const flush=()=>{
+  clearTimeout(timer);
+  saving=saving.catch(()=>{}).then(async()=>{
+   const config=collect(),next=JSON.stringify(config);
+   if(signature===next)return;
+   if(!form.reportValidity())throw Error(sv('أكمل الحقول المطلوبة','Complete required fields'));
+   out.textContent=sv('جارٍ حفظ المسودة…','Saving draft…');
+   try{const r=await send(base,'PUT',{revision,config});revision=r.revision;signature=next;out.textContent=sv('حُفظت المسودة','Draft saved')}
+   catch(e){out.textContent=serviceError(e);throw e}
+  });return saving;
+ };
+ form.addEventListener('input',()=>{clearTimeout(timer);out.textContent=sv('تغييرات في المسودة','Draft changes');timer=setTimeout(()=>flush().catch(()=>{}),900)});
+ bindForm(form,flush);return flush;
 }
 async function mountKnowledge(root,cfg,save,refresh){
  const docs=await api('/v2/agent-knowledge');

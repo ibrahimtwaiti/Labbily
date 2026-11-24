@@ -1,5 +1,7 @@
 """Bounded read-only tools and model routing on the existing durable worker."""
 import http.client
+import hmac
+import hashlib
 import ipaddress
 import json
 from .runtime_configuration import value as configured
@@ -39,7 +41,7 @@ def connections(u=Depends(user)):
         return rows(db,'SELECT kind,endpoint,updated_at FROM agent_connections WHERE tenant_id=?',(u['tenant_id'],))
 
 @router.put('/api/v2/agent-connections/{kind}')
-def configure(kind:Literal['order','availability'],data:Connection,u=Depends(user)):
+def configure(kind:Literal['order','availability','webhook'],data:Connection,u=Depends(user)):
     if u['role']!='admin':raise HTTPException(403,'workspace_admin_required')
     try:public_host(data.endpoint)
     except (ValueError,OSError):raise HTTPException(422,'public_https_endpoint_required')
@@ -48,13 +50,14 @@ def configure(kind:Literal['order','availability'],data:Connection,u=Depends(use
         # Never forward an existing credential when the destination changes.
         token=cipher().encrypt(data.token.encode()).decode() if data.token else ''
         if not token and previous and previous['endpoint']==data.endpoint:token=previous['ciphertext']
+        if kind=='webhook' and not token:raise HTTPException(422,'webhook_signing_key_required')
         db.execute('''INSERT INTO agent_connections VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,kind) DO UPDATE SET
                     endpoint=excluded.endpoint,ciphertext=excluded.ciphertext,updated_at=excluded.updated_at''',(u['tenant_id'],kind,data.endpoint,token,now()))
         audit(db,u,'agent.connection.configured',kind)
     return {'ok':True}
 
 @router.delete('/api/v2/agent-connections/{kind}')
-def disconnect(kind:Literal['order','availability'],u=Depends(user)):
+def disconnect(kind:Literal['order','availability','webhook'],u=Depends(user)):
     if u['role']!='admin':raise HTTPException(403,'workspace_admin_required')
     with transaction() as db:
         db.execute('DELETE FROM agent_connections WHERE tenant_id=? AND kind=?',(u['tenant_id'],kind))
@@ -65,8 +68,9 @@ def enqueue_job(db,t,d,mid,kind):
     rid=uid()
     db.execute('INSERT INTO agent_runs(id,tenant_id,agent_id,version,ticket_id,inbound_id,result,created_at) VALUES(?,?,?,?,?,?,?,?)',
                (rid,t['tenant_id'],d['id'],d['published'],t['id'],mid,'pending',now()))
-    db.execute('INSERT INTO agent_jobs(id,tenant_id,run_id,ticket_version,job_type,created_at) VALUES(?,?,?,?,?,?)',
-               (uid(),t['tenant_id'],rid,t['version'],kind,now()))
+    state='approval' if kind=='webhook' else 'queued'
+    db.execute('INSERT INTO agent_jobs(id,tenant_id,run_id,ticket_version,job_type,state,created_at) VALUES(?,?,?,?,?,?,?)',
+               (uid(),t['tenant_id'],rid,t['version'],kind,state,now()))
 
 def bundle(db,job,lock=False):
     run=one(db,'SELECT * FROM agent_runs WHERE id=? AND tenant_id=?',(job['run_id'],job['tenant_id']))
@@ -84,6 +88,47 @@ def bundle(db,job,lock=False):
     connector=one(db,'SELECT * FROM agent_connections WHERE tenant_id=? AND kind=?',(job['tenant_id'],kind))
     identity=one(db,'SELECT customer_id FROM service_identities WHERE tenant_id=? AND id=?',(t['tenant_id'],t['identity_id']))
     return t,a,d,cfg,connector,identity['customer_id'],message['body'],policy
+
+@router.get('/api/v2/agent-approvals')
+def approvals(u=Depends(user)):
+    manager(u)
+    with transaction() as db:
+        return rows(db,"""SELECT j.id,j.job_type,j.state,j.created_at,r.ticket_id,a.name FROM agent_jobs j JOIN agent_runs r ON r.id=j.run_id
+                           JOIN ai_agents a ON a.id=r.agent_id WHERE j.tenant_id=? AND j.state IN ('approval','unknown') ORDER BY j.created_at DESC LIMIT 100""",(u['tenant_id'],))
+
+@router.post('/api/v2/agent-approvals/{ident}')
+def approve_action(ident:str,data:dict,u=Depends(user)):
+    manager(u)
+    if type(data.get('approve')) is not bool:raise HTTPException(422,'decision_required')
+    with transaction() as db:
+        job=get(db,'agent_jobs',ident,u,True)
+        if job['state']!='approval':raise HTTPException(409,'approval_already_processed')
+        info=bundle(db,job,lock=True)
+        approved=data['approve'] and bool(info)
+        if approved and not info[4]:raise HTTPException(409,'integration_unavailable')
+        state='queued' if approved else 'canceled'
+        db.execute('UPDATE agent_jobs SET state=?,approved_connection=? WHERE id=?',(state,info[4]['updated_at'] if approved else '',ident))
+        if not approved:db.execute("UPDATE agent_runs SET result='canceled' WHERE id=?",(job['run_id'],))
+        audit(db,u,'agent.webhook.'+('approved' if approved else 'canceled'),ident)
+    return {'state':state}
+
+def call_webhook(connection,job,conversation,customer):
+    if not connection or not connection['ciphertext']:raise ValueError('integration_unavailable')
+    target,address=public_host(connection['endpoint'])
+    body=json.dumps({'event':'ai.action.executed','execution_id':job['id'],'conversation_id':conversation,
+                     'customer_ref':customer},separators=(',',':')).encode()
+    stamp=str(int(time.time()))
+    signature=hmac.new(unseal(connection['ciphertext']).encode(),stamp.encode()+b'.'+body,hashlib.sha256).hexdigest()
+    with socket.create_connection((address,443),timeout=4) as sock:
+        with ssl.create_default_context().wrap_socket(sock,server_hostname=target.hostname) as secured:
+            client=http.client.HTTPSConnection(target.hostname,timeout=4);client.sock=secured
+            try:
+                client.request('POST',target.path or '/',body,{'Content-Type':'application/json','Idempotency-Key':job['id'],
+                    'X-Labbily-Timestamp':stamp,'X-Labbily-Signature':'sha256='+signature})
+                response=client.getresponse()
+                if not 200<=response.status<300:raise ValueError('webhook_outcome_unconfirmed')
+            finally:client.close()
+    return 'استلم النظام طلب الإجراء / The receiving system accepted the action request.'
 
 def lookup(conn,kind,customer,question):
     params={}
@@ -131,11 +176,12 @@ def process_job():
     clock=int(time.time())
     with transaction() as db:
         # All remote actions are reads. A lease bounds retries after a worker crash.
-        db.execute("UPDATE agent_jobs SET state='queued',next_attempt=? WHERE state='running' AND claimed_at<?",(clock,clock-90))
+        db.execute("UPDATE agent_jobs SET state='unknown',error='dispatch_outcome_unknown' WHERE state='running' AND job_type='webhook' AND claimed_at<?",(clock-90,))
+        db.execute("UPDATE agent_jobs SET state='queued',next_attempt=? WHERE state='running' AND job_type!='webhook' AND claimed_at<?",(clock,clock-90))
         job=one(db,"SELECT * FROM agent_jobs WHERE state='queued' AND next_attempt<=? ORDER BY created_at,id LIMIT 1"+(' FOR UPDATE SKIP LOCKED' if postgres() else ''),(clock,))
         if not job:return False
         info=bundle(db,job)
-        if not info:
+        if not info or (job['job_type']=='webhook' and (not info[4] or info[4]['updated_at']!=job['approved_connection'])):
             db.execute("UPDATE agent_jobs SET state='canceled' WHERE id=?",(job['id'],))
             db.execute("UPDATE agent_runs SET result='canceled' WHERE id=?",(job['run_id'],))
             return True
@@ -151,10 +197,12 @@ def process_job():
             excerpt=bool(candidate)
             if not candidate:candidate,usage=select_source(cfg,question)
             if candidate:answer=candidate['answer'];source=candidate['title']
+        elif job['job_type']=='webhook' and 'webhook' in cfg['tools']:
+            answer=call_webhook(conn,job,t['id'],customer);source='webhook';excerpt=True
         elif job['job_type'] in cfg['tools']:
             answer=lookup(conn,job['job_type'],customer,question);source=job['job_type']
     except (httpx.HTTPError,ValueError,KeyError,IndexError,TypeError,OSError,http.client.HTTPException,HTTPException):
-        reason='integration_unavailable'
+        reason='webhook_outcome_unconfirmed' if job['job_type']=='webhook' else 'integration_unavailable'
     with transaction() as db:
         latest=one(db,'SELECT * FROM agent_jobs WHERE id=?'+(' FOR UPDATE' if postgres() else ''),(job['id'],))
         if not latest or latest['state']!='running' or latest['claimed_at']!=clock:return True
@@ -168,6 +216,9 @@ def process_job():
         t,a,d,cfg,current_conn,current_customer,_,policy=info
         if (job['job_type']=='model' and not policy['external_enabled']) or (job['job_type']!='model' and (conn!=current_conn or customer!=current_customer)):
             answer='';reason='configuration_changed'
+        if answer:
+            answer=e.render_variables(db,t,a,answer)
+            if answer is None:reason='variable_unavailable'
         mid=uid();result='internal' if d['mode']=='internal' else 'suggestion';direction='note';status='internal'
         if answer and not excerpt and d['mode'] in ('auto','hybrid'):
             from .service import policy as channel_policy
@@ -188,5 +239,5 @@ def process_job():
                        (uid(),t['tenant_id'],mid,'agent:'+job['run_id'],job['run_id'],json.dumps(p),stamp))
         db.execute('UPDATE service_tickets SET version=version+1 WHERE id=?',(t['id'],))
         db.execute('UPDATE agent_runs SET result=?,source_title=?,note_id=?,elapsed_ms=? WHERE id=?',(result,source,mid,int((time.monotonic()-started)*1000),job['run_id']))
-        db.execute("UPDATE agent_jobs SET state='done',error=? WHERE id=?",(reason if result=='handover' else '',job['id']))
+        db.execute('UPDATE agent_jobs SET state=?,error=? WHERE id=?',('unknown' if reason=='webhook_outcome_unconfirmed' else 'done',reason if result=='handover' else '',job['id']))
     return True

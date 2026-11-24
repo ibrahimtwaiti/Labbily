@@ -11,6 +11,9 @@ from .service_api import router
 
 class Limits(BaseModel):
     model_config=ConfigDict(extra="forbid",strict=True)
+    max_agents:int=Field(default=3,ge=0,le=100)
+    monthly_runs:int=Field(default=500,ge=0,le=100000)
+    knowledge_documents:int=Field(default=100,ge=0,le=100)
     seats:int=Field(default=25,ge=1,le=10000)
     channels:int=Field(default=10,ge=0,le=10000)
     meta_accounts:int=Field(default=10,ge=0,le=10000)

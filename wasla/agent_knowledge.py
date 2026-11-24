@@ -17,6 +17,7 @@ from pydantic import Field
 from .agent_api import Input, Tiny, manager
 from .db import now, one, rows, transaction, uid, audit, postgres
 from .main import user
+from .agent_engine import limits
 from .security import limit
 from .service_api import get, router
 
@@ -142,7 +143,7 @@ def import_document(data:Import,u=Depends(user)):
     content=clean(data.text or (fetch_page(data.url) if data.url else extract_file(data)))
     with transaction() as db:
         db.execute('SELECT id FROM tenants WHERE id=?'+(' FOR UPDATE' if postgres() else ''),(tid,))
-        if db.execute('SELECT count(*) FROM agent_documents WHERE tenant_id=?',(tid,)).fetchone()[0]>=100:raise HTTPException(409,'document_limit')
+        if db.execute('SELECT count(*) FROM agent_documents WHERE tenant_id=?',(tid,)).fetchone()[0]>=limits(db,tid)['knowledge_documents']:raise HTTPException(409,'document_limit')
         ident=uid()
         db.execute('INSERT INTO agent_documents(id,tenant_id,title,source_url,content,checksum,updated_at) VALUES(?,?,?,?,?,?,?)',
                    (ident,tid,data.title,data.url,content,hashlib.sha256(content.encode()).hexdigest(),now()))

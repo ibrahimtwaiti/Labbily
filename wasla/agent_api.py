@@ -26,7 +26,7 @@ class Source(Input):
 class Rule(Input):
     field:Literal['text','channel','language','priority']
     value:Tiny
-    action:Literal['knowledge','handover','followup','availability','order']
+    action:Literal['knowledge','handover','followup','availability','order','webhook']
     otherwise:Literal['continue','knowledge','handover']='continue'
 
 class Playbook(Input):
@@ -36,7 +36,7 @@ class Playbook(Input):
     language:Literal['ar','en','auto']='auto'
     tone:Literal['professional','friendly','concise']='professional'
     handover_terms:list[Tiny]=Field(default_factory=list,max_length=20)
-    tools:list[Literal['followup','availability','order']]=Field(default_factory=list,max_length=3)
+    tools:list[Literal['followup','availability','order','webhook']]=Field(default_factory=list,max_length=4)
     model_routing:bool=False
     document_ids:list[Tiny]=Field(default_factory=list,max_length=12)
     sources:list[Source]=Field(default_factory=list,max_length=60)
@@ -47,7 +47,7 @@ class Edit(Input):
 
 class Question(Input):
     question:Body
-    expected:Literal['answer','review','handover','followup','availability','order']|None=None
+    expected:Literal['answer','review','handover','followup','availability','order','webhook']|None=None
     save:bool=False
     channel:Literal['whatsapp','messenger','instagram']='whatsapp'
     language:Literal['ar','en']='ar'
@@ -202,6 +202,16 @@ def publish(ident:str,data:Publish,u=Depends(user)):
         db.execute("UPDATE ai_agents SET published=?,state='published',updated_at=? WHERE id=?",(v,now(),ident))
         audit(db,u,'agent.published',ident,str(v))
         return {'version':v}
+
+@router.get('/api/v2/agents/{ident}/versions/{version_id}')
+def version_detail(ident:str,version_id:int,u=Depends(user)):
+    manager(u)
+    with transaction() as db:
+        a=get(db,'ai_agents',ident,u)
+        v=one(db,'SELECT config FROM agent_versions WHERE agent_id=? AND version=?',(ident,version_id))
+        if not v:raise HTTPException(404,'version_not_found')
+        old=json.loads(v['config']);draft=json.loads(a['draft'])
+        return {key:{'published':old.get(key),'draft':draft.get(key)} for key in draft if old.get(key)!=draft.get(key)}
 
 @router.post('/api/v2/agents/{ident}/state')
 def transition(ident:str,data:Transition,u=Depends(user)):

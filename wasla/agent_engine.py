@@ -13,7 +13,16 @@ HUMAN = ('talk to a human','speak to a human','speak to an agent','human agent',
 FOLLOW = ('follow up','follow-up','متابعة','تابع طلبي')
 
 def limits(db, tid):
-    return one(db,'SELECT * FROM agent_limits WHERE tenant_id=?',(tid,)) or dict(DEFAULT_LIMITS)
+    policy=one(db,'SELECT * FROM agent_limits WHERE tenant_id=?',(tid,)) or dict(DEFAULT_LIMITS)
+    policy['knowledge_documents']=100
+    sub=one(db,'SELECT status,snapshot FROM service_subscriptions WHERE tenant_id=?',(tid,))
+    if sub:
+        plan=json.loads(sub['snapshot']).get('limits',{})
+        for key in ('max_agents','monthly_runs','knowledge_documents'):
+            if key in plan:policy[key]=min(policy[key],plan[key])
+        if sub['status']=='paused':
+            policy.update(live_enabled=0,external_enabled=0,max_agents=0,monthly_runs=0,knowledge_documents=0)
+    return policy
 
 def month():
     return datetime.now(timezone.utc).strftime('%Y-%m')
@@ -51,7 +60,7 @@ def decide(cfg, question, context=None):
         result=rule['action'] if match else rule.get('otherwise','continue')
         if result=='continue':continue
         if result=='knowledge':break
-        if result in ('followup','availability','order') and result not in cfg.get('tools',[]):result='handover'
+        if result in ('followup','availability','order','webhook') and result not in cfg.get('tools',[]):result='handover'
         return {'kind':result,'reason':'workflow_'+str(index+1),'answer':'','source':''}
     if any(normalized(w) in query for w in FOLLOW) and 'followup' in cfg.get('tools',[]):
         return {'kind':'followup','reason':'followup_requested','answer':'','source':''}
@@ -79,6 +88,28 @@ def decide(cfg, question, context=None):
         _,title,chunk=max(passages)
         return {'kind':'review','reason':'document_excerpt','answer':chunk,'source':title}
     return {'kind':'handover','reason':'no_reliable_source','answer':'','source':''}
+
+def render_variables(db,t,account,answer):
+    if '{{' not in answer and '}}' not in answer:return answer
+    identity=one(db,'SELECT name,customer_id FROM service_identities WHERE id=? AND tenant_id=?',(t['identity_id'],t['tenant_id']))
+    contact=one(db,'SELECT name,phone FROM contacts WHERE id=? AND tenant_id=?',(identity['customer_id'],t['tenant_id'])) if identity else None
+    company=one(db,'SELECT name FROM tenants WHERE id=?',(t['tenant_id'],))
+    owner=one(db,'SELECT name FROM users WHERE id=? AND tenant_id=?',(t['assignee_id'],t['tenant_id']))
+    from .service import settings
+    hours=settings(db,t['tenant_id'])
+    name=(contact or identity or {}).get('name','')
+    values={'customer.first_name':name.split()[0] if name else '', 'customer.phone':(contact or {}).get('phone',''),
+            'company.name':company['name'],'conversation.channel':account['channel'],'assigned_agent.name':(owner or {}).get('name',''),
+            'company.business_hours':str(hours['start_hour'])+':00–'+str(hours['end_hour'])+':00 '+hours['timezone'],
+            'current_datetime':now()}
+    def substitute(m):
+        value=values.get(m.group(1).strip())
+        if not value:raise ValueError('variable_unavailable')
+        return value
+    try:
+        rendered=re.sub(r'\{\{([^{}]{1,80})\}\}',substitute,answer)
+        return None if '{{' in rendered or '}}' in rendered else rendered[:4000]
+    except ValueError:return None
 
 def deployment(db,tid,account):
     return one(db,'''SELECT d.mode,a.id,a.published,v.config FROM agent_deployments d
@@ -109,17 +140,18 @@ def handle_inbound(db,account,ticket_id,message_id,body,stamp):
         decision={'kind':'handover','reason':'usage_limit','answer':'','source':''}
     kind=decision['kind']
     policy_limits=limits(db,tid)
-    if ((kind in ('availability','order')) or
+    if ((kind in ('availability','order','webhook')) or
         (decision['reason']=='no_reliable_source' and cfg.get('model_routing') and policy_limits['external_enabled'])):
         from .agent_jobs import enqueue_job
-        enqueue_job(db,t,d,message_id,kind if kind in ('availability','order') else 'model')
+        enqueue_job(db,t,d,message_id,kind if kind in ('availability','order','webhook') else 'model')
         return
     # Never transform a fuzzy retrieval match or an uncertain system result into an automatic send.
     run_id=uid()
     mid=uid()
     task_id=None
     clock=int(time.time())
-    output=decision['answer']
+    output=render_variables(db,t,account,decision['answer'])
+    if output is None:kind='handover';decision['reason']='variable_unavailable';output=''
     if kind=='answer' and d['mode'] in ('auto','hybrid'):
         from .service import policy
         from .saas import consume_message
