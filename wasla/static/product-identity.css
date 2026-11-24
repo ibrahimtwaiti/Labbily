@@ -247,6 +247,7 @@ th, td { text-align: start; padding-block: 12px; font-variant-numeric: tabular-n
 .app-layout[data-view=overview] .app-main > .grid .card:hover { border-color:#6987ef; }
 @media(max-width:1050px) {
   .workspace-hero { gap:12px; padding:26px 20px; }
+  .metrics-period { justify-self:start; padding:3px 9px; border-radius:6px; background:#131e3c; }
   .workspace-hero .workspace-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
   .workspace-hero .hero-copy h1 { font-size:clamp(30px,4vw,42px); }
 }
