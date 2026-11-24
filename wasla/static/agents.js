@@ -30,12 +30,12 @@ function renderCustomerContext(main,t){
  history.addEventListener('toggle',async()=>{
   if(!history.open||pending||loaded)return;
   const region=history.querySelector('[role=status]');
-  pending=true;region.textContent=sv('جارٍ تحميل السجل…','Loading history…');
+  pending=true;region.classList.add('loading-inline');region.textContent=sv('جارٍ تحميل السجل…','Loading history…');
   try{
    const events=await api('/v2/tickets/'+t.id+'/customer-timeline');
    region.innerHTML=events.map(e=>`<article><strong>${esc(e.channel)} · ${e.direction==='note'?sv('ملاحظة داخلية','Internal note'):e.direction==='in'?sv('من العميل','From customer'):sv('من الفريق','From team')}</strong><p dir="auto">${esc(e.excerpt)}</p><small><bdi>${epoch(e.occurred_at)}</bdi></small></article>`).join('')||esc(sv('لا توجد رسائل مرتبطة بعد.','No linked messages yet.'));
    loaded=true;
-  }catch(err){region.textContent=err.message;}finally{pending=false;}
+  }catch(err){region.textContent=err.message;}finally{pending=false;region.classList.remove('loading-inline');}
  });
 }
 function mountCopilot(form,t){
@@ -198,9 +198,10 @@ function wirePlaybook(form,initial,revision,base){
    const config=collect(),next=JSON.stringify(config);
    if(signature===next)return;
    if(!form.reportValidity())throw Error(sv('أكمل الحقول المطلوبة','Complete required fields'));
-   out.textContent=sv('جارٍ حفظ المسودة…','Saving draft…');
+   out.classList.add('loading-inline');out.textContent=sv('جارٍ حفظ المسودة…','Saving draft…');
    try{const r=await send(base,'PUT',{revision,config});revision=r.revision;signature=next;out.textContent=sv('حُفظت المسودة','Draft saved')}
    catch(e){out.textContent=serviceError(e);throw e}
+   finally{out.classList.remove('loading-inline')}
   });return saving;
  };
  form.addEventListener('input',()=>{clearTimeout(timer);out.textContent=sv('تغييرات في المسودة','Draft changes');timer=setTimeout(()=>flush().catch(()=>{}),900)});

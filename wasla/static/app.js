@@ -63,7 +63,36 @@ const button=(id,label,cls='')=>`<button id="${id}" class="${cls}">${label}</but
 const table=(headers,body)=>`<div class="table-scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`;
 const errorBox='<div class="error" role="alert"></div>';
 function toast(message){const el=document.querySelector('#toast');el.textContent=message;el.classList.add('visible');setTimeout(()=>el.classList.remove('visible'),4500)}
-async function api(path,options={}){
+// Requests can overlap when a provider dashboard loads several panels together.
+let pendingRequests=0, activityTimer, activityIndicator;
+function placeActivity(){
+ if(activityIndicator)(document.querySelector('dialog[open]')||document.body).append(activityIndicator);
+}
+document.addEventListener('toggle',event=>{if(event.target.tagName==='DIALOG')placeActivity()},true);
+document.addEventListener('close',placeActivity,true);
+async function withLoading(operation){
+ if(++pendingRequests===1){
+  activityTimer=setTimeout(()=>{
+   activityIndicator=document.createElement('div');
+   activityIndicator.className='request-activity';
+   activityIndicator.setAttribute('role','status');
+   activityIndicator.textContent=LANG==='ar'?'جارٍ المعالجة…':'Working…';
+   placeActivity();
+  },180);
+ }
+ try{return await operation()}
+ finally{
+  if(--pendingRequests===0){
+   clearTimeout(activityTimer);
+   activityIndicator?.remove();
+   activityIndicator=null;
+  }
+ }
+}
+function api(path,options={}){
+ return withLoading(()=>requestJson(path,options));
+}
+async function requestJson(path,options){
  const headers={'Content-Type':'application/json',...(me?{'X-CSRF-Token':me.csrf}:{}),...options.headers};
  const response=await fetch('/api'+path,{...options,headers,credentials:'same-origin'});
  const data=await response.json().catch(()=>({detail:tr("تعذر قراءة استجابة الخادم")}));
