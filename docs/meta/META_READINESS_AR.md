@@ -2,7 +2,7 @@
 
 # جاهزية Meta ومتطلبات تدخل المالك
 
-آخر تحقق وثائقي: 18 نوفمبر 2026. الحساب المطور منشأ بحسب المالك؛ لا يوجد في هذا التسليم دليل على اكتمال تحقق النشاط أو App Review أو صفة شراكة.
+تحديث 24 نوفمبر 2026. يسجل [تقرير التشغيل](../../WASLA_PRODUCTION_READINESS.md) المعاينة المستقلة وعناوين الاستقبال ونتائج الفحص. الحساب المطور منشأ بحسب المالك؛ لا يوجد في هذا التسليم دليل على اكتمال تحقق النشاط أو App Review أو صفة شراكة.
 
 ## التصنيفات منفصلة
 
@@ -15,7 +15,7 @@
 
 ## إصدارات موثقة، لا نسخ للأمثلة القديمة
 
-جدول [Graph API Versions](https://developers.facebook.com/docs/graph-api/changelog/versions/) الذي فُتح يعرض v26.0 وv25.0 بإتاحة حالية. تستخدم الإضافة allowlist لهذين الإصدارين، وتحتاج اختيار المدير صراحةً؛ لم نغيّر إصدارات حسابات V2 الموجودة. بعض صفحات المرجع تحمل v27.0، لذلك لا نساوي رقم عنوان المرجع بدليل توافق أو نرقّي كل الحسابات تلقائيًا.
+جدول [Graph API Versions](https://developers.facebook.com/docs/graph-api/changelog/versions/) الذي فُتح يعرض v26.0 وv25.0 بإتاحة حالية. تستخدم الإضافة allowlist لهذين الإصدارين، وتحتاج اختيار المدير صراحةً؛ لم نغيّر إصدارات حسابات V2 الموجودة. يعلن [سجل Graph API](https://developers.facebook.com/documentation/development/graph-api/changelog) أن v27.0 أحدث إصدار. يلزم اختبار توافق قبل إضافته إلى القائمة.
 
 [Embedded Signup v5](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/version-5) يغيّر session info إلى `messaging_account_ids` ويُفعّل انضمام WhatsApp Business app افتراضيًا. الإضافة تتعامل مع v5 وتستبعد coexistence صراحةً إلى أن يُنفذ مساره. لا يُستخدم sessionInfoVersion القديم. معرف WABA القديم ما زال ذا صلة بحساب المراسلة وفق [نظرة Embedded Signup](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview).
 
@@ -51,8 +51,8 @@
 | Messenger Platform | محادثات صفحة وإرسال/استقبال | pages_messaging؛ pages_manage_metadata للاشتراك؛ pages_read_engagement للعمليات التي تتطلبها؛ pages_show_list لاختيار الصفحات | صفحة ومستخدم ذو مهمة مناسبة، Page token وApp Review | سياسات ونوافذ المنتج وموافقة عمليات التسويق مستقلة | منفذ تجريبيًا للنصوص والاستقبال والتسليم؛ يلزم إعداد الصفحة والمراجعة واختبار حي |
 | Pages API | اختيار صفحة وقراءة بياناتها | pages_show_list، pages_read_engagement؛ scopes إضافية فقط للوظائف المختارة | Page access token ومهام الصفحة والوصول الملائم | إدارة المنشورات تحتاج مراجعة منفصلة؛ لا وصول تلقائي لبيانات عامة | اختيار الصفحة وقراءة الملف والاشتراك والفصل منفذة تجريبيًا؛ نشر النصوص منفذ بصلاحية إضافية، وينتظر اختبارًا حيًا |
 | Business Management API | إدارة الأصول | business_management وصلاحيات الأصل/العملية عند الحاجة | Business Portfolio وأدوار الأصول المناسبة | لا يخول تلقائيًا كل بيانات العملاء | دراسة فقط؛ تحديد الأصول المأذونة |
-| Catalog API | استعراض/إدارة كتالوج | catalog_management بحسب العملية | كتالوج مملوك/مشارك وصلاحيات ومراجعة مناسبة | نشاط التجارة وسياسات المنتج؛ لا نفترض إدارة الطلبات | اكتشاف واختيار ومزامنة منتجات منفذة؛ يلزم كتالوج مأذون واختبار حي |
-| Lead Ads | استقبال واسترجاع leads | leads_retrieval، وأذونات الصفحة/الاشتراك المطلوبة للمسار | صلاحية leads وأصول العميل ومراجعة | بيانات شخصية، موافقات واحتفاظ وCRM mapping | OAuth وleadgen واسترجاع leads والمزامنة منفذة؛ يلزم صفحة ونموذج وصلاحيات حية |
+| Catalog API | استعراض/إدارة كتالوج | catalog_management وbusiness_management لمسار اكتشاف كتالوجات الأعمال | كتالوج مملوك/مشارك وصلاحيات ومراجعة مناسبة | نشاط التجارة وسياسات المنتج؛ لا نفترض إدارة الطلبات | اكتشاف واختيار ومزامنة منتجات منفذة؛ يلزم كتالوج مأذون واختبار حي |
+| Lead Ads | استقبال واسترجاع leads | leads_retrieval وpages_show_list وpages_read_engagement وpages_manage_metadata وads_management لمسار وصلة | صلاحية leads وأصول العميل ومراجعة | بيانات شخصية، موافقات واحتفاظ وCRM mapping | OAuth وleadgen واسترجاع leads والمزامنة منفذة؛ يلزم صفحة ونموذج وصلاحيات حية |
 | Marketing API / Insights | تقارير إعلانات ثم إدارة اختيارية | ads_read للتقارير؛ ads_management للإدارة؛ business_management حسب عملية الأصل | حساب إعلاني ومهامه ومستوى الوصول المناسب | لا تفعيل حملات أو إنفاق تلقائي؛ حدود مستقلة | OAuth وقراءة Insights منفذان دون إدارة إعلانات؛ يلزم حساب إعلاني واختبار حي |
 
 مراجع المصفوفة: [WhatsApp App Review](https://developers.facebook.com/docs/whatsapp/solution-providers/app-review/sample-submission/)، [Instagram Login](https://developers.facebook.com/docs/instagram/platform/instagram-api/changelog/)، [Messenger conversations](https://developers.facebook.com/docs/graph-api/reference/page/conversations/)، [Pages Webhooks](https://developers.facebook.com/docs/graph-api/webhooks/getting-started/webhooks-for-pages)، [Page reference](https://developers.facebook.com/docs/graph-api/reference/page/)، [Business asset management](https://developers.facebook.com/docs/business-management-apis/business-asset-management/overview)، [System user permissions](https://developers.facebook.com/docs/business-management-apis/system-users/install-apps-and-generate-tokens/). يجب الرجوع لعقد endpoint بعينه قبل كتابة موصل الخدمات المؤجلة.
@@ -65,6 +65,6 @@
 
 1. تحديد App ID وBusiness Portfolio والنطاق النهائي وحالة التحقق من داخل حسابك؛ يمكن مشاركة المعرفات والحالات غير السرية فقط.
 2. تجهيز configuration ورقم وشركة اختبار، وإدخال الأسرار داخل اللوحة/بيئة المعاينة الآمنة.
-3. توفير اتصال **معاينة مستقلة** وصلاحية تشغيلها، ثم ترحيلها إلى schema 10 واختبار استعادتها؛ اختبار PostgreSQL المعزول في CI نُفذ، والإنتاج لم يتغير.
+3. المعاينة المستقلة ومخططها رقم 10 واستعادتها جاهزة ومختبرة. استخدم عنوان استقبال Staging المبين في تقرير التشغيل لضبط Webhooks داخل تطبيق الاختبار.
 4. تنفيذ التجربة الحية وتوثيق نتائجها، ثم اختبار مسار محو البيانات والتحقق من المتطلبات الرسمية قبل App Review.
 5. اعتماد الهوية القانونية ونموذج الاشتراك وحدود الاستخدام لاحقًا؛ لا تحصيل مدفوعات ولا ادعاء شراكة الآن.
