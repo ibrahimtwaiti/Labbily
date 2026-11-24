@@ -114,9 +114,9 @@ def digest_snapshot(cfg):
 def snapshot(db,tid,cfg):
     docs=[]
     for ident in dict.fromkeys(cfg.get('document_ids',[])):
-        row=one(db,"SELECT title,content FROM agent_documents WHERE id=? AND tenant_id=? AND status='approved'",(ident,tid))
+        row=one(db,"SELECT title,content,checksum FROM agent_documents WHERE id=? AND tenant_id=? AND status='approved'",(ident,tid))
         if not row:raise HTTPException(409,'approved_document_required')
-        docs.append({'title':row['title'],'chunks':chunks(row['content'])})
+        docs.append({'id':ident,'checksum':row['checksum'],'title':row['title'],'chunks':chunks(row['content'])})
     return {**cfg,'documents':docs}
 
 def verify_test_snapshot(db,a):
@@ -127,7 +127,7 @@ def verify_test_snapshot(db,a):
 def documents(u=Depends(user)):
     manager(u)
     with transaction() as db:
-        return rows(db,'SELECT id,title,status,source_url,updated_at FROM agent_documents WHERE tenant_id=? ORDER BY updated_at DESC',(u['tenant_id'],))
+        return rows(db,'SELECT id,title,status,source_url,updated_at,index_state,sync_hours,sync_error FROM agent_documents WHERE tenant_id=? ORDER BY updated_at DESC',(u['tenant_id'],))
 
 @router.get('/api/v2/agent-knowledge/{ident}')
 def document(ident:str,u=Depends(user)):
@@ -171,6 +171,6 @@ def refresh(ident:str,u=Depends(user)):
         current=get(db,'agent_documents',ident,u,True)
         if current['checksum']!=doc['checksum']:raise HTTPException(409,'document_changed')
         if current['checksum']!=checksum:
-            db.execute("UPDATE agent_documents SET content=?,checksum=?,status='draft',updated_at=? WHERE id=?",(content,checksum,now(),ident))
+            db.execute("UPDATE agent_documents SET content=?,checksum=?,status='draft',index_state='none',updated_at=? WHERE id=?",(content,checksum,now(),ident))
             audit(db,u,'knowledge.refreshed',ident)
     return {'changed':checksum!=doc['checksum']}

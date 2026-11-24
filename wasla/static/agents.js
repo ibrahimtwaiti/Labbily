@@ -108,6 +108,7 @@ async function agentStudioView(main,selected=null,tab='build'){
   root.querySelectorAll('[data-unbind]').forEach(el=>el.onclick=studioActions(root,async()=>{await send(base+'/deployment/'+el.dataset.unbind,'DELETE',{});await refresh()}));
  }else{
   root.innerHTML=a.metrics.length?table([sv('النتيجة','Result'),sv('العدد','Count'),sv('متوسط المعالجة','Mean processing time')],a.metrics.map(m=>`<tr><td>${aw(m.result)}</td><td>${m.count}</td><td>${Math.round(m.mean_ms)} ms</td></tr>`)):empty(sv('لم يسجل الوكيل عمليات على القنوات بعد','No channel runs yet'));
+  const costs=await api('/v2/agent-costs');if(costs.length)root.innerHTML+=`<h3>${sv('استهلاك الشركة هذا الشهر','Workspace usage this month')}</h3>`+table([sv('النموذج','Model'),sv('المهمة','Operation'),sv('رموز الإدخال / الإخراج','Input / output tokens'),'USD'],costs.map(c=>`<tr><td>${esc(c.model)}</td><td>${esc(c.operation)}</td><td>${esc(c.inputs)} / ${esc(c.outputs)}</td><td>${Number(c.priced)===Number(c.calls)?Number(c.cost).toFixed(6):'—'}</td></tr>`));
   root.innerHTML+=a.activity.map(r=>`<p><bdi>${date(r.created_at)}</bdi> · v${r.version} · ${aw(r.result)}</p>`).join('');
  }
 }
@@ -176,11 +177,13 @@ async function mountKnowledge(root,cfg,save,refresh){
   element.ontoggle=async()=>{
    const pane=element.querySelector('div');if(!element.open||pane.children.length)return;
    try{
-    const doc=await api('/v2/agent-knowledge/'+element.dataset.doc);pane.innerHTML=`<pre class="document-preview">${esc(doc.content)}</pre>`;
+    const doc=await api('/v2/agent-knowledge/'+element.dataset.doc);pane.innerHTML=`<p>${sv('الفهرس الدلالي','Semantic index')}: ${esc(doc.index_state||'none')}${doc.sync_error?' · '+esc(doc.sync_error):''}</p><pre class="document-preview">${esc(doc.content)}</pre>`;
     const action=(txt,fn)=>{const b=document.createElement('button');b.type='button';b.className='light small';b.textContent=txt;b.onclick=studioActions(pane,fn);pane.append(b)};
     if(doc.status!=='approved')action(sv('اعتماد النص المعروض','Approve this text'),async()=>{await send('/v2/agent-knowledge/'+doc.id+'/approve','POST',{checksum:doc.checksum});await refresh()});
     const ids=cfg.document_ids||[];
     if(doc.status==='approved'||ids.includes(doc.id))action(ids.includes(doc.id)?sv('فصل عن المسودة','Detach from draft'):sv('استخدام في المسودة','Use in draft'),()=>save({...cfg,document_ids:ids.includes(doc.id)?ids.filter(id=>id!==doc.id):[...ids,doc.id]}));
+    action(sv('فهرسة دلالية','Build semantic index'),async()=>{await send('/v2/agent-knowledge/'+doc.id+'/index','POST',{});await refresh()});
+    if(doc.source_url){const selectBox=document.createElement('div');selectBox.innerHTML=select('sync',sv('تكرار المزامنة','Refresh schedule'),[['0',sv('يدوي','Manual')],['24',sv('يومي','Daily')],['168',sv('أسبوعي','Weekly')]],String(doc.sync_hours||0));pane.append(selectBox);selectBox.querySelector('select').onchange=async e=>{try{await send('/v2/agent-knowledge/'+doc.id+'/schedule','PUT',{hours:Number(e.target.value)});toast(tr('تم الحفظ بنجاح'))}catch(err){toast(err.message)}}}
     if(doc.source_url)action(sv('مزامنة الصفحة','Refresh page'),async()=>{await send('/v2/agent-knowledge/'+doc.id+'/refresh','POST',{});await refresh()});
    }catch(e){pane.textContent=serviceError(e)}
   };

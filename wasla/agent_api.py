@@ -194,6 +194,9 @@ def publish(ident:str,data:Publish,u=Depends(user)):
         if a['state']=='archived' or a['tested_revision']!=a['revision']: raise HTTPException(409,'test_current_draft_first')
         from .agent_knowledge import snapshot, verify_test_snapshot
         verify_test_snapshot(db,a)
+        if a['state']=='published' and a['published']:
+            old=one(db,'SELECT config FROM agent_versions WHERE agent_id=? AND version=?',(ident,a['published']))
+            if old and json.loads(old['config'])==snapshot(db,u['tenant_id'],json.loads(a['draft'])):return {'version':a['published']}
         v=db.execute('SELECT COALESCE(MAX(version),0)+1 FROM agent_versions WHERE agent_id=?',(ident,)).fetchone()[0]
         db.execute('INSERT INTO agent_versions VALUES(?,?,?,?,?)',(u['tenant_id'],ident,v,dump(snapshot(db,u['tenant_id'],json.loads(a['draft']))),now()))
         db.execute("UPDATE ai_agents SET published=?,state='published',updated_at=? WHERE id=?",(v,now(),ident))
@@ -205,6 +208,7 @@ def transition(ident:str,data:Transition,u=Depends(user)):
     manager(u)
     with transaction() as db:
         a=get(db,'ai_agents',ident,u,True);check_revision(a,data.revision)
+        if a['state']=='archived':raise HTTPException(409,'agent_archived')
         if data.action=='restore':
             v=one(db,'SELECT config FROM agent_versions WHERE agent_id=? AND version=?',(ident,data.version))
             if not v or a['state']=='archived': raise HTTPException(409,'version_unavailable')
@@ -283,6 +287,6 @@ def copilot(ident:str,data:Assist,u=Depends(user)):
     with transaction() as db:
         get(db,'service_tickets',ident,u)
         usage=result.get('usage',{})
-        db.execute('UPDATE agent_usage SET input_tokens=input_tokens+?,output_tokens=output_tokens+? WHERE tenant_id=? AND month=?',
-                   (int(usage.get('input_tokens',0)),int(usage.get('output_tokens',0)),tid,period))
+        from .agent_retrieval import meter
+        meter(db,tid,data.operation,result.get('model') or configured('LABBILY_OPENAI_MODEL'),usage,period)
     return {'answer':answer,'sent':False,'kind':'draft','source':''}

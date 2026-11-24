@@ -141,12 +141,15 @@ def process_job():
             return True
         db.execute("UPDATE agent_jobs SET state='running',attempts=attempts+1,claimed_at=? WHERE id=?",(clock,job['id']))
     t,a,d,cfg,conn,customer,question,policy=info
-    answer='';source='';reason='no_reliable_source';usage={};started=time.monotonic()
+    answer='';source='';reason='no_reliable_source';usage={};excerpt=False;started=time.monotonic()
     try:
         if job['attempts']>=2:raise ValueError('attempt_limit')
         if job['job_type']=='model':
             if not cfg.get('model_routing') or not policy['external_enabled']:raise ValueError('model_not_approved')
-            candidate,usage=select_source(cfg,question)
+            from .agent_retrieval import semantic
+            candidate=semantic(t['tenant_id'],cfg,question)
+            excerpt=bool(candidate)
+            if not candidate:candidate,usage=select_source(cfg,question)
             if candidate:answer=candidate['answer'];source=candidate['title']
         elif job['job_type'] in cfg['tools']:
             answer=lookup(conn,job['job_type'],customer,question);source=job['job_type']
@@ -157,8 +160,8 @@ def process_job():
         if not latest or latest['state']!='running' or latest['claimed_at']!=clock:return True
         info=bundle(db,job,lock=True)
         if usage:
-            db.execute('UPDATE agent_usage SET input_tokens=input_tokens+?,output_tokens=output_tokens+? WHERE tenant_id=? AND month=?',
-                       (int(usage.get('input_tokens',0)),int(usage.get('output_tokens',0)),job['tenant_id'],job['created_at'][:7]))
+            from .agent_retrieval import meter
+            meter(db,job['tenant_id'],'route',configured('LABBILY_OPENAI_MODEL'),usage,job['created_at'][:7])
         if not info:
             db.execute("UPDATE agent_jobs SET state='canceled' WHERE id=?",(job['id'],))
             db.execute("UPDATE agent_runs SET result='canceled' WHERE id=?",(job['run_id'],));return True
@@ -166,7 +169,7 @@ def process_job():
         if (job['job_type']=='model' and not policy['external_enabled']) or (job['job_type']!='model' and (conn!=current_conn or customer!=current_customer)):
             answer='';reason='configuration_changed'
         mid=uid();result='internal' if d['mode']=='internal' else 'suggestion';direction='note';status='internal'
-        if answer and d['mode'] in ('auto','hybrid'):
+        if answer and not excerpt and d['mode'] in ('auto','hybrid'):
             from .service import policy as channel_policy
             from .saas import consume_message
             p={'kind':'text','agent_id':d['id'],'agent_version':d['published'],'ticket_version':t['version']+1}
