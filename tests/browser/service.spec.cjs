@@ -9,7 +9,8 @@ for(const lang of ['ar','en']){
   const reportResponse=await page.request.get('/api/v2/reports');
   expect(reportResponse.ok()).toBeTruthy();
   const report=await reportResponse.json();
-  await expect(tiles.first().locator('bdi')).toHaveText(new Intl.NumberFormat(lang).format(report.tickets));
+  const formatted=await page.evaluate(({lang,count})=>new Intl.NumberFormat(lang).format(count),{lang,count:report.tickets});
+  await expect(tiles.first().locator('bdi')).toHaveText(formatted);
   const bubble=page.locator('.workspace-hero img.pearl');
   await expect(bubble).toBeVisible();
   await expect.poll(()=>bubble.evaluate(el=>el.complete && el.naturalWidth>0)).toBeTruthy();
@@ -18,8 +19,8 @@ for(const lang of ['ar','en']){
   await page.emulateMedia({reducedMotion:'no-preference'});
   await expect(bubble).toHaveCSS('animation-name','pearl-float');
   await page.locator('.workspace-hero a[href="/app/inbox"]').click();
-  await expect(page).toHaveURL('**/app/inbox*');
-  await page.goto('/app/inbox?lang='+lang);await expect(page.locator('.service-ticket').first()).toBeVisible();await page.locator('.service-ticket').first().click();
+  await expect(page).toHaveURL(url=>url.pathname==='/app/inbox');
+  await expect(page.locator('.service-ticket').first()).toBeVisible();await page.locator('.service-ticket').first().click();
   await expect(page.locator('#service-composer')).toBeVisible();
   const composer=page.locator('#service-composer [name=body]');
   const draft=lang==='ar'?'سأراجع تفاصيل المحادثة\nوأعود إليك بالخطوة التالية.':'I will review the conversation\nand follow up.';
