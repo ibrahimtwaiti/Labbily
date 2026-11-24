@@ -119,8 +119,11 @@ async def receive(channel:str,request:Request):
 @router.get('/api/v2/tickets')
 def tickets(q:str='',status:str='',channel:str='',u=Depends(user)):
     permit(u,'inbox')
-    sql='''SELECT t.*,i.name,i.provider_user_id,a.channel,a.label account_label FROM service_tickets t
-        JOIN service_identities i ON i.id=t.identity_id JOIN service_accounts a ON a.id=i.account_id WHERE t.tenant_id=?'''; args=[u['tenant_id']]
+    sql='''SELECT t.*,i.name,i.provider_user_id,a.channel,a.label account_label,
+        (SELECT COUNT(*) FROM service_messages m WHERE m.ticket_id=t.id AND m.direction='in')-COALESCE((SELECT seen_count FROM inbox_seen WHERE ticket_id=t.id AND user_id=?),0) AS unread_count,
+        (SELECT m.body FROM service_messages m WHERE m.ticket_id=t.id AND m.direction!='note' ORDER BY m.occurred_at DESC,m.created_at DESC,m.id DESC LIMIT 1) AS last_message,
+        ag.name AS agent_name FROM service_tickets t
+        JOIN service_identities i ON i.id=t.identity_id JOIN service_accounts a ON a.id=i.account_id LEFT JOIN agent_deployments dep ON dep.account_id=a.id LEFT JOIN ai_agents ag ON ag.id=dep.agent_id AND ag.state='published' WHERE t.tenant_id=?'''; args=[u['id'],u['tenant_id']]
     if u['role']=='sales': sql+=' AND t.assignee_id=?'; args.append(u['id'])
     if status: sql+=' AND t.status=?'; args.append(status)
     if channel: sql+=' AND a.channel=?'; args.append(channel)
@@ -184,7 +187,7 @@ def enqueue(ident:str,data:dict,request:Request,u=Depends(user)):
     p['header_parameters']=data.get('header_parameters',[])
     p['header_attachment_id']=text(data,'header_attachment_id',0,120)
     p['button_parameters']=data.get('button_parameters',{})
-    fingerprint=hashlib.sha256(json.dumps({'ticket':ident,'body':body,'direction':direction,**p},sort_keys=True).encode()).hexdigest()
+    fingerprint=hashlib.sha256(json.dumps({'ticket':ident,'body':body,'direction':direction,**({'mention':text(data,'mention_id',1,120)} if direction=='note' and data.get('mention_id') else {}),**p},sort_keys=True).encode()).hexdigest()
     with transaction() as db:
         t=get(db,'service_tickets',ident,u,True)
         old=one(db,'SELECT * FROM service_outbox WHERE tenant_id=? AND request_key=?',(u['tenant_id'],key))
@@ -203,6 +206,12 @@ def enqueue(ident:str,data:dict,request:Request,u=Depends(user)):
         db.execute('INSERT INTO service_outbox(id,tenant_id,message_id,request_key,payload_hash,payload,state,created_at) VALUES(?,?,?,?,?,?,?,?)',
             (uid(),u['tenant_id'],mid,key,fingerprint,json.dumps(p),'queued' if direction=='out' else 'internal',stamp))
         db.execute('UPDATE service_tickets SET version=version+1,automation_paused=1,updated_at=? WHERE id=?',(stamp,ident))
+        if direction=='note':
+            mentioned=data.get('mention_id')
+            if mentioned:
+                receiver=one(db,"SELECT id,role FROM users WHERE tenant_id=? AND id=? AND active=1 AND role IN ('admin','supervisor','sales')",(u['tenant_id'],mentioned))
+                if not receiver or (receiver['role']=='sales' and t['assignee_id']!=receiver['id']):raise HTTPException(422,'mention_requires_ticket_access')
+                db.execute('INSERT INTO notifications(id,user_id,title,entity_id,created_at) VALUES(?,?,?,?,?)',(uid(),receiver['id'],'إشارة في ملاحظة داخلية / Internal mention',ident,now()))
         audit(db,u,'service.message.'+direction,mid)
     return {'id':mid,'status':state}
 

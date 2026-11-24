@@ -30,10 +30,29 @@ def normalized(value):
     return ' '.join(re.findall(r'[^\W_]+', ''.join(c for c in unicodedata.normalize('NFKD',value.casefold())
         if not unicodedata.combining(c)),re.UNICODE))
 
-def decide(cfg, question):
+def case_data(value):
+    try:
+        data=json.loads(value)
+        if isinstance(data,dict) and isinstance(data.get('question'),str):return data
+    except ValueError:pass
+    return {'question':value}
+
+def run_case(cfg,raw):
+    data=case_data(raw)
+    return decide(cfg,data['question'],data)
+
+def decide(cfg, question, context=None):
     query=normalized(question)
     if any(normalized(w) in query for w in (*HUMAN,*cfg.get('handover_terms',[]))):
         return {'kind':'handover','reason':'human_requested','answer':'','source':''}
+    for index,rule in enumerate(cfg.get('rules',[])):
+        key=rule['field'];val=normalized(rule['value'])
+        match=(val in query) if key=='text' else ((context or {}).get(key)==rule['value'])
+        result=rule['action'] if match else rule.get('otherwise','continue')
+        if result=='continue':continue
+        if result=='knowledge':break
+        if result=='followup' and 'followup' not in cfg.get('tools',[]):result='handover'
+        return {'kind':result,'reason':'workflow_'+str(index+1),'answer':'','source':''}
     if any(normalized(w) in query for w in FOLLOW) and 'followup' in cfg.get('tools',[]):
         return {'kind':'followup','reason':'followup_requested','answer':'','source':''}
     words=set(query.split())
@@ -71,7 +90,7 @@ def dispatch_allowed(db,ticket,account,payload):
     d=deployment(db,ticket['tenant_id'],account['id'])
     return (d and d['mode'] in ('auto','hybrid') and d['id']==payload['agent_id']
             and d['published']==payload['agent_version'] and ticket['version']==payload['ticket_version']
-            and not ticket['automation_paused'] and not ticket['assignee_id']
+            and ticket['snoozed_until']<=int(time.time()) and not ticket['automation_paused'] and not ticket['assignee_id']
             and limits(db,ticket['tenant_id'])['live_enabled'])
 
 def handle_inbound(db,account,ticket_id,message_id,body,stamp):
@@ -81,11 +100,11 @@ def handle_inbound(db,account,ticket_id,message_id,body,stamp):
     if not d or not limits(db,tid)['live_enabled']:
         return
     t=one(db,'SELECT * FROM service_tickets WHERE tenant_id=? AND id=?',(tid,ticket_id))
-    if (t['automation_paused'] or t['assignee_id'] or stamp<t['last_customer_at']
+    if (t['snoozed_until']>int(time.time()) or t['automation_paused'] or t['assignee_id'] or stamp<t['last_customer_at']
         or t['status'] in ('closed','resolved') or one(db,'SELECT id FROM agent_runs WHERE inbound_id=?',(message_id,))):
         return
     cfg=json.loads(d['config'])
-    decision=decide(cfg,body)
+    decision=decide(cfg,body,{'channel':account['channel'],'language':t['language'],'priority':t['priority']})
     if not reserve(db,tid,limits(db,tid)['monthly_runs']):
         decision={'kind':'handover','reason':'usage_limit','answer':'','source':''}
     kind=decision['kind']

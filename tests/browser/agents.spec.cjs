@@ -1,0 +1,28 @@
+const {test,expect}=require('@playwright/test');
+test('workspace agent draft, source, simulation, publish and protected deployment',async({page})=>{
+ await page.goto('/login?lang=en');
+ await page.locator('[name=email]').fill('service@example.test');
+ await page.locator('[name=password]').fill('service-test-password');
+ await page.locator('button[type=submit]').click();
+ await page.waitForURL('**/app');
+ await page.goto('/app/agents?lang=en');
+ await page.locator('#agent-new').click();
+ const name='Review '+Date.now();
+ await page.locator('#create-agent [name=name]').fill(name);
+ await page.locator('#create-agent button[type=submit]').click();
+ await expect(page.locator('.agent-board h2')).toHaveText(name);
+ await page.getByRole('button',{name:'Knowledge',exact:true}).click();
+ await page.locator('#agent-source [name=title]').fill('Opening hours');
+ await page.locator('#agent-source [name=answer]').fill('Open from nine to five.');
+ await page.locator('#agent-source button[type=submit]').click();
+ await expect(page.getByText('Opening hours',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Playground',exact:true}).click();
+ await page.locator('[name=question]').fill('Opening hours');
+ await page.locator('[name=expected]').selectOption('answer');
+ await page.locator('#agent-play button[type=submit]').click();
+ await expect(page.locator('.agent-preview')).toContainText('Open from nine to five.');
+ await page.getByRole('button',{name:'Deploy',exact:true}).click();
+ await page.locator('#agent-publish').click();
+ await expect(page.locator('.agent-board')).toContainText('1 · Published');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
+});

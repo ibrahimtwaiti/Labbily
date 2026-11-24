@@ -609,7 +609,7 @@ def sitemap(request:Request):
 
 from .service_api import router as service_router
 from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding, meta_lifecycle, saas, meta_pages, email_verification, privacy, meta_data, messenger_metrics, page_posts, api_docs
-from . import agent_api, agent_knowledge
+from . import agent_api, agent_knowledge, inbox_workspace
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')

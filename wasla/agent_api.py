@@ -23,8 +23,15 @@ class Source(Input):
     answer:Body
     aliases:list[Tiny]=Field(default_factory=list,max_length=12)
 
+class Rule(Input):
+    field:Literal['text','channel','language','priority']
+    value:Tiny
+    action:Literal['knowledge','handover','followup']
+    otherwise:Literal['continue','knowledge','handover']='continue'
+
 class Playbook(Input):
     name:Tiny
+    rules:list[Rule]=Field(default_factory=list,max_length=12)
     instructions:str=Field(default='',max_length=3000)
     language:Literal['ar','en','auto']='auto'
     tone:Literal['professional','friendly','concise']='professional'
@@ -41,6 +48,9 @@ class Question(Input):
     question:Body
     expected:Literal['answer','review','handover','followup']|None=None
     save:bool=False
+    channel:Literal['whatsapp','messenger','instagram']='whatsapp'
+    language:Literal['ar','en']='ar'
+    priority:Literal['low','normal','high','urgent']='normal'
 
 class Publish(Input):
     revision:int=Field(ge=1)
@@ -126,6 +136,8 @@ def agent_detail(ident:str,u=Depends(user)):
         a['versions']=rows(db,'SELECT version,created_at FROM agent_versions WHERE agent_id=? ORDER BY version DESC',(ident,))
         a['deployments']=rows(db,'SELECT d.account_id,d.mode,s.label FROM agent_deployments d JOIN service_accounts s ON s.id=d.account_id WHERE d.agent_id=?',(ident,))
         a['scenarios']=rows(db,'SELECT id,question,expected FROM agent_scenarios WHERE agent_id=? ORDER BY id',(ident,))
+        for item in a['scenarios']:
+            item['question']=engine.case_data(item['question'])['question']
         a['metrics']=rows(db,'SELECT result,COUNT(*) AS count,AVG(elapsed_ms) AS mean_ms FROM agent_runs WHERE agent_id=? GROUP BY result',(ident,))
         a['activity']=rows(db,'SELECT result,version,created_at,elapsed_ms FROM agent_runs WHERE agent_id=? ORDER BY created_at DESC LIMIT 30',(ident,))
         return a
@@ -150,14 +162,15 @@ def playground(ident:str,data:Question,u=Depends(user)):
         start=time.monotonic()
         from .agent_knowledge import snapshot
         cfg=snapshot(db,u['tenant_id'],json.loads(a['draft']))
-        decision=engine.decide(cfg,data.question)
+        context={'channel':data.channel,'language':data.language,'priority':data.priority}
+        decision=engine.decide(cfg,data.question,context)
         expected=data.expected
         if data.save:
             if not expected: raise HTTPException(422,'expected_outcome_required')
             if db.execute('SELECT count(*) FROM agent_scenarios WHERE agent_id=?',(ident,)).fetchone()[0]>=50: raise HTTPException(409,'scenario_limit')
-            db.execute('INSERT INTO agent_scenarios VALUES(?,?,?,?,?)',(uid(),u['tenant_id'],ident,data.question,expected))
+            db.execute('INSERT INTO agent_scenarios VALUES(?,?,?,?,?)',(uid(),u['tenant_id'],ident,dump({'question':data.question,**context}),expected))
         checks=rows(db,'SELECT question,expected FROM agent_scenarios WHERE agent_id=?',(ident,))
-        passed=bool(checks) and all(engine.decide(cfg,c['question'])['kind']==c['expected'] for c in checks)
+        passed=bool(checks) and all(engine.run_case(cfg,c['question'])['kind']==c['expected'] for c in checks)
         from .agent_knowledge import digest_snapshot
         db.execute('UPDATE ai_agents SET tested_revision=?,tested_snapshot=? WHERE id=?',(a['revision'] if passed else 0,digest_snapshot(cfg) if passed else '',ident))
         return {**decision,'simulation':True,'engine':'approved-knowledge','elapsed_ms':int((time.monotonic()-start)*1000),
@@ -249,7 +262,8 @@ def copilot(ident:str,data:Assist,u=Depends(user)):
         if not engine.reserve(db,tid,config['monthly_runs']): raise HTTPException(429,'agent_monthly_limit')
         messages=rows(db,"SELECT body FROM service_messages WHERE ticket_id=? AND tenant_id=? AND direction='in' ORDER BY occurred_at DESC,created_at DESC,id DESC LIMIT 5",(ident,tid))
         if not remote:
-            return {**engine.decide(cfg,data.text or (messages[0]['body'] if messages else '')),'sent':False}
+            context={'channel':t['source'],'language':t['language'],'priority':t['priority']}
+            return {**engine.decide(cfg,data.text or (messages[0]['body'] if messages else ''),context),'sent':False}
         content=data.text if data.operation not in ('summarize','intent','next_step') else '\n'.join(m['body'][:600] for m in reversed(messages))
         if not content.strip(): raise HTTPException(422,'text_required')
         audit(db,u,'agent.copilot.requested',ident,data.operation)
