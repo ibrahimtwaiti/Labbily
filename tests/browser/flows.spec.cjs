@@ -46,3 +46,25 @@ test('unauthenticated protected page redirects to login',async({page})=>{
  await expect(page.locator('#login-form')).toBeVisible();
  await expect(page).toHaveURL(/\/login$/);
 });
+
+for (const lang of ['ar', 'en']) {
+ test(`${lang}: solution filters, related pages and demo interest`, async ({page}) => {
+  await page.goto('/services?lang=' + lang);
+  const cards = page.locator('#service-grid .solution-card:visible');
+  await expect(cards).toHaveCount(10);
+  for (const [group, count] of Object.entries({service:3, automation:2, marketing:2, integrations:2, governance:1, all:10})) {
+   const button = page.locator(`[data-filter="${group}"]`);
+   await button.focus();
+   await page.keyboard.press('Enter');
+   await expect(button).toHaveAttribute('aria-pressed', 'true');
+   await expect(cards).toHaveCount(count);
+  }
+  await cards.locator('[href="/services/campaigns"]').click();
+  await expect(page.locator('main [data-status="planned"]').first()).toBeVisible();
+  await expect(page.locator('main a[href*="/request"]')).toHaveCount(0);
+  await page.locator('main a[href="/services/analytics"]').click();
+  await page.locator('main a[href="/request?service=analytics"]').first().click();
+  await expect(page.locator('select[name="service"]')).toHaveValue('analytics');
+  await expect(page.locator('select[name="service"] option[value="campaigns"]')).toHaveCount(0);
+ });
+}

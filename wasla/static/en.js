@@ -641,5 +641,16 @@ window.WASLA_EN={
   "وضح التعديل المطلوب": "Describe the required revision",
   "يجب إرسال JSON": "Send JSON data",
   "يرجى التحقق من الحقل:": "Please check the field:",
-  "يرجى تسجيل الدخول": "Please sign in"
+  "يرجى تسجيل الدخول": "Please sign in",
+  "ما الحل المناسب لفريقي؟": "Which solution fits my team?",
+  "ابدأ بالمحادثات إن كنت تحتاج إلى تنظيم الردود، أو استكشف الأتمتة إذا أردت توزيع الاستفسارات تلقائيًا.": "Start with the inbox to organize replies, or explore automation to route inquiries automatically.",
+  "كيف أعرف ما هو متاح؟": "How do I know what is available?",
+  "توضح كل بطاقة حالة الحل. وتعرض صفحة التفاصيل المزايا المتاحة وشروط تشغيلها.": "Each card shows the solution’s status. Its detail page lists available features and activation requirements.",
+  "هل يمكن طلب عرض لحل محدد؟": "Can I request a demo for one solution?",
+  "افتح تفاصيل الحل المتاح واختر طلب عرض توضيحي. سيظهر اسم الحل في نموذج الطلب.": "Open an available solution and request a demo. The form will already have that solution selected.",
+  "يجمع فريقك المحادثات وبيانات العملاء في مساحة واحدة، مع توزيع الاستفسارات ومتابعة الردود.": "Bring conversations and customer records into one workspace to route inquiries and follow up on replies.",
+  "يتحدد النطاق وفق عدد المستخدمين والقنوات واحتياجات الربط.": "Scope depends on users, channels and integration needs.",
+  "إعداد الحسابات والتكاملات المطلوبة.": "Account setup and required integrations.",
+  "تتطلب القنوات الخارجية تفويض الحساب والتحقق من الاتصال قبل التشغيل.": "External channels require account authorization and connection verification before activation.",
+  "حلول المحادثات والأتمتة وخدمة العملاء.": "Conversation management, automation and customer service solutions."
 };

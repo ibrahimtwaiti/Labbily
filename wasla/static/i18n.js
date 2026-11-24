@@ -10,6 +10,6 @@ function tMarkup(value){return LANG==='ar'?value:value.replace(/[\u0600-\u06ff][
 function languageLink(){const url=new URL(location.href);url.searchParams.set('lang',LANG==='ar'?'en':'ar');return `<a class="language-link" href="${url.pathname+url.search}" lang="${LANG==='ar'?'en':'ar'}" hreflang="${LANG==='ar'?'en':'ar'}">${LANG==='ar'?'English':'العربية'}</a>`}
 if(LANG==='en'){
  document.querySelector('.skip').textContent='Skip to content';
- document.querySelector('meta[name="description"]').content='Wasla connects sales operations, teams, customers and opportunities in one workspace.';
+ if (!document.querySelector('link[rel="canonical"]')) document.querySelector('meta[name="description"]').content='Conversation management, automation and customer service solutions.';
  document.querySelector('.loading').textContent='Loading Wasla…';
 }

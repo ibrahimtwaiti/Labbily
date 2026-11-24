@@ -1,0 +1,330 @@
+[
+  {
+    "id": "unified-inbox",
+    "group": "service",
+    "status": "limited",
+    "icon": "chat",
+    "related": [
+      "team-management",
+      "channel-api"
+    ],
+    "ar": {
+      "name": "إدارة المحادثات الموحدة",
+      "subtitle": "سياق العميل أمام الفريق",
+      "summary": "اجمع رسائل القنوات المفعّلة في صندوق واحد يعرف فيه كل موظف المحادثات المسندة إليه.",
+      "features": [
+        "سجل الرسائل حسب القناة",
+        "إسناد المحادثة وتحديث حالتها",
+        "ردود محفوظة وتصفية حسب الفريق"
+      ],
+      "use_case": "يفتح الموظف استفسارًا واردًا، يراجع الرسائل السابقة ثم يحيله إلى زميله.",
+      "scope": "يتطلب استقبال الرسائل وإرسالها تفعيل القناة والتحقق منها."
+    },
+    "en": {
+      "name": "Unified inbox",
+      "subtitle": "Give your team the conversation history",
+      "summary": "Bring enabled channels into one inbox where each teammate can find their assigned conversations.",
+      "features": [
+        "Channel message history",
+        "Conversation ownership and status",
+        "Saved replies and team filters"
+      ],
+      "use_case": "An agent opens an inquiry, reads its history and hands it to a colleague.",
+      "scope": "Sending and receiving require an enabled, verified channel."
+    }
+  },
+  {
+    "id": "automation",
+    "group": "automation",
+    "status": "limited",
+    "icon": "layers",
+    "related": [
+      "unified-inbox",
+      "team-management"
+    ],
+    "ar": {
+      "name": "الأتمتة الذكية وروبوتات المحادثة",
+      "subtitle": "وجّه الاستفسار إلى الموظف المناسب",
+      "summary": "وزّع المحادثات الواردة وفق إعدادات الفريق وسعة الموظفين.",
+      "features": [
+        "اختيار موظف متاح للإسناد",
+        "حد للمحادثات النشطة لكل موظف"
+      ],
+      "use_case": "عند ورود محادثة جديدة، تطبّق المنصة إعدادات التوزيع لتحديد مسؤول المتابعة.",
+      "scope": "المتاح حاليًا هو التوجيه الآلي. منشئ مسارات الروبوتات ضمن التطوير المخطط."
+    },
+    "en": {
+      "name": "Automation and chatbots",
+      "subtitle": "Route each inquiry to the right teammate",
+      "summary": "Route incoming conversations using team settings and agent capacity.",
+      "features": [
+        "Automatic agent selection",
+        "Active conversation limits per agent"
+      ],
+      "use_case": "When a conversation arrives, the platform applies the routing settings to select an owner.",
+      "scope": "Automatic routing is available. A chatbot flow builder is planned."
+    }
+  },
+  {
+    "id": "channel-api",
+    "group": "integrations",
+    "status": "limited",
+    "icon": "link",
+    "related": [
+      "unified-inbox",
+      "integrations"
+    ],
+    "ar": {
+      "name": "ربط واتساب وقنوات التواصل API",
+      "subtitle": "تابع حالة اتصال كل قناة",
+      "summary": "جهّز الحسابات المؤهلة للربط عبر واجهات القنوات الرسمية وتابع حالة التفويض.",
+      "features": [
+        "إعداد ربط واتساب",
+        "متابعة حالة الحساب وإعادة التفويض",
+        "مزامنة قوالب واتساب للحساب المؤهل"
+      ],
+      "use_case": "يراجع المدير أهلية الحساب ويكمل التفويض ثم يتحقق من الاتصال قبل استخدام القناة.",
+      "scope": "يعتمد التشغيل على صلاحيات المزود واجتياز اختبار إرسال واستقبال فعلي لكل حساب."
+    },
+    "en": {
+      "name": "WhatsApp and social channel APIs",
+      "subtitle": "See the connection status of each channel",
+      "summary": "Connect eligible accounts through official channel APIs and track their authorization.",
+      "features": [
+        "WhatsApp onboarding",
+        "Account status and reauthorization",
+        "Template sync for eligible WhatsApp accounts"
+      ],
+      "use_case": "An admin reviews eligibility, completes authorization and checks the connection before using the channel.",
+      "scope": "Activation depends on provider permissions and a successful live send-and-receive test for each account."
+    }
+  },
+  {
+    "id": "ai-agents",
+    "group": "automation",
+    "status": "limited",
+    "icon": "chat",
+    "related": [
+      "automation",
+      "unified-inbox"
+    ],
+    "ar": {
+      "name": "وكلاء الذكاء الاصطناعي ومساعد الموظف",
+      "subtitle": "رد مقترح يراجعه الموظف",
+      "summary": "يستطيع الموظف اختيار اقتراح من الردود التي اعتمدها المشرف وتحريره قبل الإرسال.",
+      "features": [
+        "اقتراح من الردود المحفوظة المعتمدة",
+        "مراجعة نص الرد وتعديله"
+      ],
+      "use_case": "عند تكرار سؤال، يطلب الموظف اقتراحًا ويعدّل النص ليناسب حالة العميل.",
+      "scope": "المتاح مساعد للردود المحفوظة. الوكلاء المستقلون وتوليد الردود بالذكاء الاصطناعي مخططان."
+    },
+    "en": {
+      "name": "AI agents and agent assistance",
+      "subtitle": "Give staff a reply they can review",
+      "summary": "Staff can select a suggestion from supervisor-approved replies and edit it before sending.",
+      "features": [
+        "Suggestions from approved saved replies",
+        "Agent review and editing"
+      ],
+      "use_case": "For a recurring question, an agent requests a suggestion and adapts it to the customer.",
+      "scope": "Saved-reply assistance is available. Autonomous agents and generative replies are planned."
+    }
+  },
+  {
+    "id": "crm",
+    "group": "service",
+    "status": "ready",
+    "icon": "people",
+    "related": [
+      "unified-inbox",
+      "analytics"
+    ],
+    "ar": {
+      "name": "إدارة علاقات العملاء CRM",
+      "subtitle": "ملف واحد لمتابعة العلاقة",
+      "summary": "نظّم بيانات العميل ووسومه وموافقاته، وتابع الفرص وخطواتها القادمة.",
+      "features": [
+        "ملف العميل وبيانات التواصل",
+        "وسوم وموافقات موثقة",
+        "فرص مرتبطة بمراحل ومهام متابعة"
+      ],
+      "use_case": "يفتح الموظف ملف العميل بعد محادثة، ثم يسجل فرصة ويحدد موعد المتابعة.",
+      "scope": "يُتاح الاطلاع والتعديل بحسب دور الموظف داخل الشركة."
+    },
+    "en": {
+      "name": "Customer relationship management (CRM)",
+      "subtitle": "Keep the next follow-up in sight",
+      "summary": "Organize customer details, tags and consents alongside opportunities and next steps.",
+      "features": [
+        "Contact records",
+        "Tags and recorded consents",
+        "Opportunity stages and follow-up tasks"
+      ],
+      "use_case": "After a conversation, an agent opens the contact, records an opportunity and schedules a follow-up.",
+      "scope": "Access to records and changes depends on the employee’s company role."
+    }
+  },
+  {
+    "id": "team-management",
+    "group": "service",
+    "status": "ready",
+    "icon": "people",
+    "related": [
+      "unified-inbox",
+      "security"
+    ],
+    "ar": {
+      "name": "إدارة فرق خدمة العملاء",
+      "subtitle": "مسؤول واضح لكل محادثة",
+      "summary": "اضبط أدوار الموظفين وتابع عبء العمل وأعد إسناد المحادثات عند الحاجة.",
+      "features": [
+        "أدوار وصلاحيات داخل الشركة",
+        "إسناد المحادثات وتحويلها",
+        "متابعة الحالات بحسب الفريق والموظف"
+      ],
+      "use_case": "يراجع المشرف المحادثات المفتوحة وينقل إحداها إلى موظف لديه سعة للمتابعة.",
+      "scope": "تخضع إجراءات الإسناد وإدارة الأعضاء لصلاحيات الحساب."
+    },
+    "en": {
+      "name": "Customer service teams",
+      "subtitle": "Give each conversation an owner",
+      "summary": "Set team roles, review workloads and reassign conversations when needed.",
+      "features": [
+        "Company roles and permissions",
+        "Conversation assignment and handoff",
+        "Team and agent filters"
+      ],
+      "use_case": "A supervisor reviews open conversations and hands one to a teammate with capacity.",
+      "scope": "Assignment and member management depend on the account’s permissions."
+    }
+  },
+  {
+    "id": "campaigns",
+    "group": "marketing",
+    "status": "planned",
+    "icon": "trend",
+    "related": [
+      "analytics",
+      "crm"
+    ],
+    "ar": {
+      "name": "الحملات التسويقية",
+      "subtitle": "حملات رسائل موجهة",
+      "summary": "حل مخطط لتنظيم جمهور حملات الرسائل ومتابعة الإرسال والتفاعل.",
+      "features": [],
+      "use_case": "في التصور المخطط، يختار الفريق جمهورًا وافق على التواصل ويتابع نتيجة حملة الرسائل.",
+      "scope": "إطلاق الحملات وجدولتها غير متاحين حاليًا."
+    },
+    "en": {
+      "name": "Messaging campaigns",
+      "subtitle": "Reach an opted-in audience",
+      "summary": "A planned solution for organizing message audiences and tracking delivery and engagement.",
+      "features": [],
+      "use_case": "In the planned workflow, the team selects an opted-in audience and reviews the outcome of a message campaign.",
+      "scope": "Campaign scheduling and sending are not currently available."
+    }
+  },
+  {
+    "id": "analytics",
+    "group": "marketing",
+    "status": "ready",
+    "icon": "trend",
+    "related": [
+      "team-management",
+      "unified-inbox"
+    ],
+    "ar": {
+      "name": "التقارير والتحليلات",
+      "subtitle": "اعرف أين تحتاج المحادثات إلى متابعة",
+      "summary": "راجع مؤشرات خدمة العملاء ووقت الاستجابة مستندًا إلى سجلات فريقك.",
+      "features": [
+        "مؤشرات المحادثات وأوقات الاستجابة",
+        "تصفية حسب الفترة والقناة والفريق",
+        "تصدير البيانات وفق الصلاحيات"
+      ],
+      "use_case": "يقارن المشرف أوقات الاستجابة بين فريقين خلال أسبوع واحد لتحديد أين يلزم دعم إضافي.",
+      "scope": "تعكس التقارير المحادثات المسجلة في المنصة والفترة المحددة."
+    },
+    "en": {
+      "name": "Reports and analytics",
+      "subtitle": "See where conversations need attention",
+      "summary": "Review service activity and response times using your team’s recorded conversations.",
+      "features": [
+        "Conversation and response-time measures",
+        "Period, channel and team filters",
+        "Permission-based export"
+      ],
+      "use_case": "A supervisor compares two teams’ response times over one week to identify where more coverage is needed.",
+      "scope": "Reports reflect the conversations recorded on the platform and the selected period."
+    }
+  },
+  {
+    "id": "integrations",
+    "group": "integrations",
+    "status": "limited",
+    "icon": "link",
+    "related": [
+      "channel-api",
+      "crm"
+    ],
+    "ar": {
+      "name": "التكامل والربط البرمجي",
+      "subtitle": "اربط بيانات التواصل بسير العمل",
+      "summary": "استفد من الواجهات الموثقة والربط المتاح بين المحادثة وسجل العميل.",
+      "features": [
+        "توثيق عمليات الواجهة البرمجية",
+        "ربط المحادثة بعميل CRM داخلي",
+        "استقبال أحداث القنوات المدعومة"
+      ],
+      "use_case": "يربط المشرف محادثة بملف العميل كي يستطيع الفريق الرجوع إلى سياقها في المتابعة.",
+      "scope": "يتطلب الربط المخصص مراجعة الواجهات والصلاحيات المناسبة لكل نظام."
+    },
+    "en": {
+      "name": "Integrations and developer API",
+      "subtitle": "Connect conversation data with your workflow",
+      "summary": "Use documented operations and the existing connection between conversations and customer records.",
+      "features": [
+        "Documented API operations",
+        "Links to internal CRM records",
+        "Inbound events for supported channels"
+      ],
+      "use_case": "A supervisor links a conversation to a CRM contact so teammates can use its context during follow-up.",
+      "scope": "Custom integrations require a review of the interfaces and permissions for each system."
+    }
+  },
+  {
+    "id": "security",
+    "group": "governance",
+    "status": "ready",
+    "icon": "check",
+    "related": [
+      "team-management",
+      "integrations"
+    ],
+    "ar": {
+      "name": "الأمان وحوكمة البيانات",
+      "subtitle": "تحكّم في الوصول إلى بيانات شركتك",
+      "summary": "أدر صلاحيات الفريق وراجع العمليات الإدارية وطلبات حذف البيانات.",
+      "features": [
+        "عزل سجلات الشركات",
+        "صلاحيات بحسب الدور وسجل تدقيق",
+        "طلبات حذف تراعي قيود الاحتفاظ"
+      ],
+      "use_case": "يوقف المدير وصول موظف غادر الشركة ثم يراجع التغيير في سجل التدقيق.",
+      "scope": "تطبق الضوابط داخل نطاق الشركة ووفق صلاحيات كل دور."
+    },
+    "en": {
+      "name": "Security and data governance",
+      "subtitle": "Control access to your company’s records",
+      "summary": "Manage team permissions, review administrative actions and handle deletion requests.",
+      "features": [
+        "Company record isolation",
+        "Role-based access and an audit log",
+        "Deletion requests subject to retention controls"
+      ],
+      "use_case": "An admin revokes a departing teammate’s access and reviews the change in the audit log.",
+      "scope": "Controls operate within each company and the permissions assigned to each role."
+    }
+  }
+]

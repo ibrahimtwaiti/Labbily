@@ -19,7 +19,7 @@ with httpx.Client(base_url=origin,timeout=30,follow_redirects=False) as client:
     assert 'noindex,nofollow' in client.get('/setup').text
     en=client.get('/api/catalog?lang=en').json()
     assert en['brand']['primary'].startswith('#')  # Owner may edit the approved identity.
-    assert len(en['services'])==11
-    assert en['services'][0]['name']=='WhatsApp sales management'
+    assert len(en['services'])==10
+    assert en['services'][0]['id']=='unified-inbox'
     print('Production checks passed: pages, assets, database health, security headers, private routes, worker authorization, 404 and English catalog.')
     print('Service request intake enabled:',en['request_ready'])

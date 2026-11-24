@@ -56,8 +56,28 @@ class Acceptance(unittest.TestCase):
         for url in ['/api/health','/','/services','/login','/static/app.js','/static/styles.css']:
             self.assertEqual(self.client.get(url).status_code,200)
         self.assertEqual(self.client.get('/api/not-real').status_code,404)
-    def test_catalog_contains_all_eleven_services(self):
-        self.assertEqual(len(self.client.get('/api/catalog').json()['services']),11)
+    def test_public_solution_catalog_and_retired_routes(self):
+        for lang in ('ar', 'en'):
+            services = self.client.get('/api/catalog', params={'lang': lang}).json()['services']
+            self.assertEqual(len({s['id'] for s in services}), 10)
+            self.assertEqual([s['order'] for s in services], list(range(1, 11)))
+            for service in services:
+                path = '/services/' + service['id']
+                response = self.client.get(path, params={'lang': lang})
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('<title>' + service['name'] + '</title>', response.text)
+                self.assertIn('rel="canonical"', response.text)
+        redirect = self.client.get('/services/whatsapp-api?lang=en', follow_redirects=False)
+        self.assertEqual(redirect.status_code, 301)
+        self.assertEqual(redirect.headers['location'], '/services/channel-api?lang=en')
+        self.assertEqual(self.client.get('/services/stores').status_code, 410)
+        sitemap = self.client.get('/sitemap.xml').text
+        self.assertNotIn('/services/stores', sitemap)
+        self.assertIn('/services/analytics?lang=en', sitemap)
+        for unavailable in ('campaigns', 'stores'):
+            response = self.client.post('/api/requests', json={**self.request_data(), 'service': unavailable},
+                                        headers={'Idempotency-Key': uuid4().hex})
+            self.assertEqual(response.status_code, 422)
     def test_request_saved_with_reference_owner_opportunity_and_notification(self):
         r=self.client.post('/api/requests',json=self.request_data(),headers={'Idempotency-Key':uuid4().hex});self.assertEqual(r.status_code,201,r.text)
         self.assertTrue(r.json()['reference'].startswith('WS-'))
