@@ -6,10 +6,10 @@ import re
 import xml.etree.ElementTree as ET
 from fastapi import HTTPException
 
-DEFAULTS = dict(name='وصلة', name_en='Wasla', primary='#834DFB', secondary='#F0E100', ink='#1B102B', background='#F5F3FF', surface='#FFFFFF', muted='#70677E', radius=24, logo_width=166, logo_padding=4, logo_position='start', font_ar='Tajawal', font_en='Manrope', icon_style='outline', shadow='soft', logo_light='', logo_dark='', hero_image='', social_instagram='', social_linkedin='', social_x='', sections=['services','about','benefits','process','faq','contact'])
+DEFAULTS = dict(name='Labbily', name_en='Labbily', primary='#2F5BFF', secondary='#D4F53C', ink='#0B0F14', background='#FFFFFF', surface='#FFFFFF', muted='#54575A', radius=16, logo_width=152, logo_padding=9, logo_position='start', font_ar='IBM Plex Sans Arabic', font_en='Inter', icon_style='outline', shadow='soft', logo_light='', logo_dark='', hero_image='', social_instagram='', social_linkedin='', social_x='', sections=['services','about','benefits','process','faq','contact'])
 COLORS={'primary','secondary','ink','background','surface','muted'}
 ASSETS={'logo_light','logo_dark','hero_image'}
-CHOICES={'logo_position':{'start','center'},'font_ar':{'Tajawal','Tahoma','Arial'},'font_en':{'Manrope','Arial','Tahoma'},'icon_style':{'outline','soft'},'shadow':{'soft','none'}}
+CHOICES={'logo_position':{'start','center'},'font_ar':{'IBM Plex Sans Arabic','Tahoma','Arial'},'font_en':{'Inter','Arial','Tahoma'},'icon_style':{'outline','soft'},'shadow':{'soft','none'}}
 
 def asset(value):
     if value=='': return value
@@ -60,8 +60,20 @@ def validate(data):
 
 def read(db):
     row=db.execute("SELECT value FROM content WHERE key='brand'").fetchone()
-    return {**DEFAULTS,**json.loads(row['value'])} if row else DEFAULTS.copy()
+    saved = json.loads(row['value']) if row else {}
+    # Display the new defaults for stored copies of the previous brand preset.
+    # Preserve provider overrides, section order, social accounts and uploaded media.
+    legacy = {'name': 'وصلة', 'name_en': 'Wasla', 'primary': '#834dfb', 'secondary': '#f0e100',
+              'ink': '#1b102b', 'background': '#f5f3ff', 'muted': '#70677e',
+              'font_ar': 'Tajawal', 'font_en': 'Manrope'}
+    for slot in ('logo_light', 'logo_dark'):
+        if saved.get(slot) == '/static/brand/logo.png':
+            saved[slot] = ''
+    if saved.get('font_ar') != 'Tajawal' and saved.get('font_en') != 'Manrope' and saved.get('name_en') != 'Wasla':
+        return {**DEFAULTS, **saved}
+    return {**DEFAULTS, **{key: value for key, value in saved.items()
+                           if key not in legacy or str(value).casefold() != legacy[key].casefold()}}
 
 def css(b):
-    tokens={'brand':b['primary'],'brand-hover':b['ink'],'accent':b['secondary'],'ink':b['ink'],'paper':b['background'],'surface':b['surface'],'muted':b['muted'],'radius':str(b['radius'])+'px','logo-width':str(b['logo_width'])+'px','logo-padding':str(b['logo_padding'])+'px','font':b['font_ar']+', '+b['font_en']+', sans-serif','font-en':b['font_en']+', sans-serif','shadow':'0 16px 48px #1b102b0b' if b['shadow']=='soft' else 'none'}
+    tokens={'brand':b['primary'],'brand-hover':'var(--ui-hover)','accent':b['secondary'],'ink':b['ink'],'paper':b['background'],'surface':b['surface'],'muted':b['muted'],'radius':str(b['radius'])+'px','logo-width':str(b['logo_width'])+'px','logo-padding':str(b['logo_padding'])+'px','font':b['font_ar']+', '+b['font_en']+', sans-serif','font-ar':b['font_ar']+', '+b['font_en']+', sans-serif','font-en':b['font_en']+', "IBM Plex Sans Arabic", sans-serif','shadow':'0 16px 48px #0b0f140d' if b['shadow']=='soft' else 'none'}
     return ':root{'+''.join('--'+k+':'+v+';' for k,v in tokens.items())+'}'

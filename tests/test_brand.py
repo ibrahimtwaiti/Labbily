@@ -10,10 +10,23 @@ class BrandAcceptance(unittest.TestCase):
     def save(self,**values):
         return self.client.put('/api/admin/brand',json={**DEFAULTS,**values})
     def test_public_tokens_and_defaults(self):
-        self.assertEqual(self.client.get('/api/catalog').json()['brand']['primary'],'#834DFB')
+        self.assertEqual(self.client.get('/api/catalog').json()['brand']['primary'],'#2F5BFF')
         r=self.client.get('/api/brand.css');self.assertEqual(r.status_code,200)
-        self.assertIn('--brand:#834DFB',r.text)
+        self.assertIn('--brand:#2F5BFF',r.text)
         self.assertIn('text/css',r.headers['content-type'])
+    def test_saved_previous_preset_keeps_provider_layout_and_handles(self):
+        import json
+        from wasla.db import transaction, now
+        saved = {'name': 'وصلة', 'name_en': 'Wasla', 'font_ar': 'Tajawal', 'font_en': 'Manrope',
+                 'primary': '#834dfb', 'sections': ['contact'], 'social_x': 'https://example.test/account'}
+        with transaction() as db:
+            db.execute('INSERT INTO content VALUES(?,?,?)', ('brand', json.dumps(saved), now()))
+        result = self.client.get('/api/catalog').json()['brand']
+        self.assertEqual((result['name'], result['font_ar'], result['primary']),
+                         ('Labbily', 'IBM Plex Sans Arabic', '#2F5BFF'))
+        self.assertEqual(result['sections'], ['contact'])
+        self.assertEqual(result['social_x'], saved['social_x'])
+
     def test_anonymous_and_company_admin_cannot_change_identity(self):
         self.assertEqual(self.save().status_code,401)
         self.login();self.assertEqual(self.save().status_code,403)
@@ -33,7 +46,7 @@ class BrandAcceptance(unittest.TestCase):
             data='data:image/svg+xml;base64,'+base64.b64encode(svg.encode()).decode()
             self.assertEqual(self.save(logo_light=data).status_code,422)
     def test_safe_svg_and_reset(self):
-        self.login('provider');data='data:image/svg+xml;base64,'+base64.b64encode(b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill="#834DFB" d="M0 0h20v20H0Z"/></svg>').decode()
+        self.login('provider');data='data:image/svg+xml;base64,'+base64.b64encode(b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill="#2F5BFF" d="M0 0h20v20H0Z"/></svg>').decode()
         self.assertEqual(self.save(logo_light=data).status_code,200)
         self.assertEqual(self.client.get('/api/catalog').json()['brand']['logo_light'],data)
         self.assertEqual(self.save(logo_light='').status_code,200)

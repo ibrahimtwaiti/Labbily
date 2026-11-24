@@ -1,10 +1,37 @@
 const {test,expect}=require('@playwright/test');
 for(const lang of ['ar','en']){
- test(`V2 ${lang}: ticket, note, conflict, channels and reports`,async({page})=>{
+ test(`V2 ${lang}: ticket, note, conflict, channels and reports`,async({page},testInfo)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/login?lang='+lang);await page.locator('[name=email]').fill('service@example.test');await page.locator('[name=password]').fill('service-test-password');await page.locator('button[type=submit]').click();await page.waitForURL('**/app');
-  await page.goto('/app/inbox?lang='+lang);await expect(page.locator('.service-ticket').first()).toBeVisible();await page.locator('.service-ticket').first().click();
+  await page.goto('/app/overview?lang='+lang);
+  const tiles=page.locator('.overview-metric');
+  await expect(tiles).toHaveCount(4);
+  const reportResponse=await page.request.get('/api/v2/reports');
+  expect(reportResponse.ok()).toBeTruthy();
+  const report=await reportResponse.json();
+  const formatted=await page.evaluate(({lang,count})=>new Intl.NumberFormat(lang).format(count),{lang,count:report.tickets});
+  await expect(tiles.first().locator('bdi')).toHaveText(formatted);
+  const bubble=page.locator('.workspace-hero img.pearl');
+  await expect(bubble).toBeVisible();
+  await expect.poll(()=>bubble.evaluate(el=>el.complete && el.naturalWidth>0)).toBeTruthy();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await expect(bubble).toHaveCSS('animation-name','none');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await expect(bubble).toHaveCSS('animation-name','pearl-float');
+  await page.locator('.workspace-hero a[href="/app/inbox"]').click();
+  await expect(page).toHaveURL(url=>url.pathname==='/app/inbox');
+  await expect(page.locator('.service-ticket').first()).toBeVisible();await page.locator('.service-ticket').first().click();
   await expect(page.locator('#service-composer')).toBeVisible();
+  const composer=page.locator('#service-composer [name=body]');
+  const draft=lang==='ar'?'سأراجع تفاصيل المحادثة\nوأعود إليك بالخطوة التالية.':'I will review the conversation\nand follow up.';
+  await composer.fill(draft);
+  const toggle=page.locator('#sidebar-toggle');
+  await toggle.click();
+  await expect(composer).toHaveValue(draft);
+  await toggle.click();
+  await expect(composer).toHaveValue(draft);
+  await page.locator('.service-thread-head').scrollIntoViewIfNeeded();
+  await testInfo.attach('labbily-inbox-'+lang,{body:await page.screenshot(),contentType:'image/png'});
   const note='Internal QA '+Date.now();await page.locator('#service-composer [name=body]').fill(note);await page.locator('#service-composer button[type=submit]').click();await expect(page.locator('.service-messages')).toContainText(note);
   await expect(page.locator('.service-messages .note').last()).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
