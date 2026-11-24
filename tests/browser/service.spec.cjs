@@ -3,6 +3,22 @@ for(const lang of ['ar','en']){
  test(`V2 ${lang}: ticket, note, conflict, channels and reports`,async({page},testInfo)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/login?lang='+lang);await page.locator('[name=email]').fill('service@example.test');await page.locator('[name=password]').fill('service-test-password');await page.locator('button[type=submit]').click();await page.waitForURL('**/app');
+  await page.goto('/app/overview?lang='+lang);
+  const tiles=page.locator('.overview-metric');
+  await expect(tiles).toHaveCount(4);
+  const reportResponse=await page.request.get('/api/v2/reports');
+  expect(reportResponse.ok()).toBeTruthy();
+  const report=await reportResponse.json();
+  await expect(tiles.first().locator('bdi')).toHaveText(new Intl.NumberFormat(lang).format(report.tickets));
+  const bubble=page.locator('.workspace-hero img.pearl');
+  await expect(bubble).toBeVisible();
+  await expect.poll(()=>bubble.evaluate(el=>el.complete && el.naturalWidth>0)).toBeTruthy();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await expect(bubble).toHaveCSS('animation-name','none');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await expect(bubble).toHaveCSS('animation-name','pearl-float');
+  await page.locator('.workspace-hero a[href="/app/inbox"]').click();
+  await expect(page).toHaveURL('**/app/inbox*');
   await page.goto('/app/inbox?lang='+lang);await expect(page.locator('.service-ticket').first()).toBeVisible();await page.locator('.service-ticket').first().click();
   await expect(page.locator('#service-composer')).toBeVisible();
   const composer=page.locator('#service-composer [name=body]');
