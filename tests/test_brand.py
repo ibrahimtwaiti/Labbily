@@ -14,6 +14,19 @@ class BrandAcceptance(unittest.TestCase):
         r=self.client.get('/api/brand.css');self.assertEqual(r.status_code,200)
         self.assertIn('--brand:#2F5BFF',r.text)
         self.assertIn('text/css',r.headers['content-type'])
+    def test_saved_previous_preset_keeps_provider_layout_and_handles(self):
+        import json
+        from wasla.db import transaction, now
+        saved = {'name': 'وصلة', 'name_en': 'Wasla', 'font_ar': 'Tajawal', 'font_en': 'Manrope',
+                 'primary': '#834dfb', 'sections': ['contact'], 'social_x': 'https://example.test/account'}
+        with transaction() as db:
+            db.execute('INSERT INTO content VALUES(?,?,?)', ('brand', json.dumps(saved), now()))
+        result = self.client.get('/api/catalog').json()['brand']
+        self.assertEqual((result['name'], result['font_ar'], result['primary']),
+                         ('Labbily', 'IBM Plex Sans Arabic', '#2F5BFF'))
+        self.assertEqual(result['sections'], ['contact'])
+        self.assertEqual(result['social_x'], saved['social_x'])
+
     def test_anonymous_and_company_admin_cannot_change_identity(self):
         self.assertEqual(self.save().status_code,401)
         self.login();self.assertEqual(self.save().status_code,403)

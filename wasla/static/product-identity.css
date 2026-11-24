@@ -30,6 +30,7 @@ button:disabled, button:disabled:hover { background: var(--ui-disabled); color: 
 .public-header { height: 78px; background: var(--brand-navy); border-color: transparent; color: white; }
 .header-actions .button, .brand-hero .button { background: var(--brand); color: white; }
 .header-actions .button:hover, .brand-hero .button:hover { background: var(--ui-hover); }
+.header-actions .button:active, .brand-hero .button:active { background: var(--primary-700); }
 .public-header :is(.nav a,.language-link,.login-link,.menu-toggle) { color: white; }
 .public-header :is(.nav a,.language-link,.login-link):hover, .hero-secondary:hover { color: var(--brand-accent); }
 .public-header .menu-toggle { border-color: var(--primary-300); }

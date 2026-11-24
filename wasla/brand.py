@@ -66,9 +66,14 @@ def read(db):
     legacy = {'name': 'وصلة', 'name_en': 'Wasla', 'primary': '#834dfb', 'secondary': '#f0e100',
               'ink': '#1b102b', 'background': '#f5f3ff', 'muted': '#70677e',
               'font_ar': 'Tajawal', 'font_en': 'Manrope'}
+    for slot in ('logo_light', 'logo_dark'):
+        if saved.get(slot) == '/static/brand/logo.png':
+            saved[slot] = ''
+    if saved.get('font_ar') != 'Tajawal' and saved.get('font_en') != 'Manrope' and saved.get('name_en') != 'Wasla':
+        return {**DEFAULTS, **saved}
     return {**DEFAULTS, **{key: value for key, value in saved.items()
                            if key not in legacy or str(value).casefold() != legacy[key].casefold()}}
 
 def css(b):
-    tokens={'brand':b['primary'],'brand-hover':'var(--ui-hover)','accent':b['secondary'],'ink':b['ink'],'paper':b['background'],'surface':b['surface'],'muted':b['muted'],'radius':str(b['radius'])+'px','logo-width':str(b['logo_width'])+'px','logo-padding':str(b['logo_padding'])+'px','font':b['font_ar']+', '+b['font_en']+', sans-serif','font-en':b['font_en']+', "IBM Plex Sans Arabic", sans-serif','shadow':'0 16px 48px #0b0f140d' if b['shadow']=='soft' else 'none'}
+    tokens={'brand':b['primary'],'brand-hover':'var(--ui-hover)','accent':b['secondary'],'ink':b['ink'],'paper':b['background'],'surface':b['surface'],'muted':b['muted'],'radius':str(b['radius'])+'px','logo-width':str(b['logo_width'])+'px','logo-padding':str(b['logo_padding'])+'px','font':b['font_ar']+', '+b['font_en']+', sans-serif','font-ar':b['font_ar']+', '+b['font_en']+', sans-serif','font-en':b['font_en']+', "IBM Plex Sans Arabic", sans-serif','shadow':'0 16px 48px #0b0f140d' if b['shadow']=='soft' else 'none'}
     return ':root{'+''.join('--'+k+':'+v+';' for k,v in tokens.items())+'}'
