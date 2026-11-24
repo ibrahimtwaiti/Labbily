@@ -63,7 +63,36 @@ const button=(id,label,cls='')=>`<button id="${id}" class="${cls}">${label}</but
 const table=(headers,body)=>`<div class="table-scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`;
 const errorBox='<div class="error" role="alert"></div>';
 function toast(message){const el=document.querySelector('#toast');el.textContent=message;el.classList.add('visible');setTimeout(()=>el.classList.remove('visible'),4500)}
-async function api(path,options={}){
+// Requests can overlap when a provider dashboard loads several panels together.
+let pendingRequests=0, activityTimer, activityIndicator;
+function placeActivity(){
+ if(activityIndicator)(document.querySelector('dialog[open]')||document.body).append(activityIndicator);
+}
+document.addEventListener('toggle',event=>{if(event.target.tagName==='DIALOG')placeActivity()},true);
+document.addEventListener('close',placeActivity,true);
+async function withLoading(operation){
+ if(++pendingRequests===1){
+  activityTimer=setTimeout(()=>{
+   activityIndicator=document.createElement('div');
+   activityIndicator.className='request-activity';
+   activityIndicator.setAttribute('role','status');
+   activityIndicator.textContent=LANG==='ar'?'جارٍ المعالجة…':'Working…';
+   placeActivity();
+  },180);
+ }
+ try{return await operation()}
+ finally{
+  if(--pendingRequests===0){
+   clearTimeout(activityTimer);
+   activityIndicator?.remove();
+   activityIndicator=null;
+  }
+ }
+}
+function api(path,options={}){
+ return withLoading(()=>requestJson(path,options));
+}
+async function requestJson(path,options){
  const headers={'Content-Type':'application/json',...(me?{'X-CSRF-Token':me.csrf}:{}),...options.headers};
  const response=await fetch('/api'+path,{...options,headers,credentials:'same-origin'});
  const data=await response.json().catch(()=>({detail:tr("تعذر قراءة استجابة الخادم")}));
@@ -177,7 +206,7 @@ function bindSidebar() {
   };
   paint();
 }
-function dashboardShell(view){const menu=menus[me.role];app.innerHTML=`<div class="app-layout" data-view="${esc(view)}"><aside id="workspace-sidebar" class="sidebar">${brandLogo(true,true)}<div class="sidebar-label">${tr("مساحة العمل")}</div><nav id="workspace-nav" aria-label="${tr("تنقل مساحة العمل")}">${menu.map(([v,t,i])=>`<a href="/app/${v}" class="${view===v?'active':''}" ${view===v?'aria-current="page"':''} aria-label="${esc(t)}" title="${esc(t)}"><span class="nav-symbol">${icon(workspaceIcons[v]||'dashboard')}</span><span class="nav-text">${t}</span></a>`).join('')}</nav><div class="sidebar-bottom">${tr("Labbily · الإصدار الثاني")}<a href="/">${tr("زيارة الموقع ←")}</a><a href="/app/account">${tr("إعدادات حسابي")}</a></div></aside><div><header class="app-top"><button id="sidebar-toggle" type="button" class="outline small" aria-controls="workspace-nav">☰</button><div class="workspace-location"><b>${esc(menu.find(m=>m[0]===view)?.[1]||tr("الحساب"))}</b></div><div class="user-pill"><span class="avatar">${esc(me.name[0])}</span><div class="small-text"><a href="/app/account"><b>${esc(me.name)}</b></a><br><span class="muted">${esc(labels[me.role])}</span></div>${languageLink()}<button id="logout" class="outline small">${tr("خروج")}</button></div></header><main id="main" class="app-main"><div class="loading">${tr("جارٍ تحميل البيانات…")}</div></main></div>`;bindSidebar();document.querySelector('#logout').onclick=async()=>{try{await send('/auth/logout','POST',{});location.href='/login'}catch(e){toast(e.message)}}}
+function dashboardShell(view){const menu=menus[me.role];app.innerHTML=`<div class="app-layout" data-view="${esc(view)}"><aside id="workspace-sidebar" class="sidebar">${brandLogo(true,true)}<div class="sidebar-label">${tr("مساحة العمل")}</div><nav id="workspace-nav" aria-label="${tr("تنقل مساحة العمل")}">${menu.map(([v,t,i])=>`<a href="/app/${v}" class="${view===v?'active':''}" ${view===v?'aria-current="page"':''} aria-label="${esc(t)}" title="${esc(t)}"><span class="nav-symbol">${icon(workspaceIcons[v]||'dashboard')}</span><span class="nav-text">${t}</span></a>`).join('')}</nav><div class="sidebar-bottom">${tr("Labbily · الإصدار الثاني")}<a href="/">${tr("زيارة الموقع ←")}</a><a href="/app/account">${tr("إعدادات حسابي")}</a></div></aside><div><header class="app-top"><button id="sidebar-toggle" type="button" class="outline small" aria-controls="workspace-nav">☰</button><div class="workspace-location"><b>${esc(menu.find(m=>m[0]===view)?.[1]||tr("الحساب"))}</b></div><div class="user-pill"><span class="avatar">${esc(me.name[0])}</span><div class="small-text"><a href="/app/account"><b>${esc(me.name)}</b></a><br><span class="muted">${esc(labels[me.role])}</span></div>${languageLink()}<button id="logout" class="outline small">${tr("خروج")}</button></div></header><main id="main" class="app-main"><div class="loading" role="status">${tr("جارٍ تحميل البيانات…")}</div></main></div>`;bindSidebar();document.querySelector('#logout').onclick=async()=>{try{await send('/auth/logout','POST',{});location.href='/login'}catch(e){toast(e.message)}}}
 function wireRows(attr,callback){document.querySelectorAll(`[${attr}]`).forEach(el=>el.onclick=()=>{Promise.resolve(callback(el.getAttribute(attr))).catch(e=>toast(e.message))})}
 function overviewHero(title,accent,description,actions,metrics,period='') {
   const links=actions.map(([label,url],i)=>`<a class="${i?'hero-secondary':'button'}" href="${url}">${label}${i?'':icon('arrow')}</a>`).join('');

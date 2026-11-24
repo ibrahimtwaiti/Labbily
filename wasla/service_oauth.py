@@ -72,7 +72,7 @@ def start(ident:str,request:Request,u=Depends(user)):
 def landing():
     # The first cross-site redirect carries no Strict session cookie. Resume with a
     # same-origin authenticated POST; do not weaken the existing cookie policy.
-    return HTMLResponse('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Wasla authorization</title><p id="oauth-status">جارٍ إكمال الربط / Completing authorization…</p><a href="/app/channels">العودة إلى القنوات / Back to channels</a><script src="/static/service-oauth.js" defer></script></html>',headers={'Referrer-Policy':'no-referrer'})
+    return HTMLResponse('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Wasla authorization</title><link rel="stylesheet" href="/static/loading.css"><p class="loading" role="status" id="oauth-status">جارٍ إكمال الربط / Completing authorization…</p><a href="/app/channels">العودة إلى القنوات / Back to channels</a><script src="/static/service-oauth.js" defer></script></html>',headers={'Referrer-Policy':'no-referrer'})
 
 @router.post('/api/v2/oauth/instagram/complete')
 def callback(data:dict,request:Request,u=Depends(user)):

@@ -1,0 +1,17 @@
+/* The same Labbily bubble accompanies both page loads and in-place work. */
+.loading, .loading-inline, .request-activity { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.loading { min-height: 140px; color: inherit; }
+.loading-inline { display: inline-flex; gap: 6px; }
+.loading::before, .loading-inline::before, .request-activity::before {
+  content: ""; width: 46px; height: 46px; flex: none;
+  background: center / contain no-repeat url("/static/labbily/loading.svg");
+}
+.loading-inline::before { width: 24px; height: 24px; }
+.request-activity {
+  position: fixed; z-index: 1000; inset-inline-end: max(16px, env(safe-area-inset-right)); inset-block-end: max(16px, env(safe-area-inset-bottom));
+  margin: 0; padding: 7px 14px; border: 1px solid #59698c; border-radius: 16px;
+  background: #131d39; color: #fff; box-shadow: 0 4px 14px #0b0f1426;
+  font: inherit; pointer-events: none;
+}
+.request-activity::before { width: 32px; height: 32px; }
+body:has(#app :is(.loading,.loading-inline)) > .request-activity { display: none; }
