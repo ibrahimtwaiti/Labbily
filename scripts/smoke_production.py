@@ -7,7 +7,7 @@ import httpx
 origin=sys.argv[1].rstrip('/')
 if not origin.startswith('https://'):raise SystemExit('HTTPS origin required')
 with httpx.Client(base_url=origin,timeout=30,follow_redirects=False) as client:
-    for path in ['/','/services','/privacy','/terms','/login','/setup','/robots.txt','/sitemap.xml','/static/brand/logo.png','/static/fonts/Tajawal-Regular.ttf','/static/en.js','/api/brand.css']:
+    for path in ['/','/services','/privacy','/terms','/login','/setup','/robots.txt','/sitemap.xml','/static/labbily/logos/on-light.svg','/static/labbily/fonts/IBMPlexSansArabic-Regular.woff2','/static/en.js','/api/brand.css']:
         response=client.get(path);assert response.status_code==200,(path,response.status_code)
     health=client.get('/api/health');assert health.json()['status']=='ok'
     assert 'no-store' in health.headers['cache-control']

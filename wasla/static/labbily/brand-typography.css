@@ -1,0 +1,7 @@
+@font-face{font-family:'Inter';src:url('./fonts/Inter.woff2') format('woff2');font-weight:100 900;font-display:swap}
+@font-face{font-family:'IBM Plex Sans Arabic';src:url('./fonts/IBMPlexSansArabic-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'IBM Plex Sans Arabic';src:url('./fonts/IBMPlexSansArabic-Medium.woff2') format('woff2');font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:'IBM Plex Sans Arabic';src:url('./fonts/IBMPlexSansArabic-SemiBold.woff2') format('woff2');font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:'IBM Plex Sans Arabic';src:url('./fonts/IBMPlexSansArabic-Bold.woff2') format('woff2');font-weight:700;font-style:normal;font-display:swap}
+:root{--font-en:Inter,Arial,sans-serif;--font-ar:"IBM Plex Sans Arabic",Tahoma,sans-serif}body{font-family:var(--font-en)}:lang(ar){font-family:var(--font-ar);letter-spacing:normal;line-height:1.65}
+:lang(en){font-family:var(--font-en)}

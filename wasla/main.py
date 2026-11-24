@@ -618,8 +618,11 @@ def shell(path:str,request:Request):
     if path.startswith('api/'): raise HTTPException(404,'المسار غير موجود')
     lang=request.query_params.get('lang',request.cookies.get('wasla_lang','ar'))
     en=lang=='en'; source=(STATIC/'index.html').read_text()
+    public_origin = (os.getenv('WASLA_ORIGIN') or str(request.base_url)).rstrip('/')
+    image_path = '/static/labbily/digital/dark/open-graph.png'
+    source = source.replace(f'content="{image_path}"', f'content="{html.escape(public_origin, quote=True)}{image_path}"')
     if en:
-        source=source.replace('lang="ar" dir="rtl"','lang="en" dir="ltr"').replace('وصلة | Wasla','Wasla | Conversations and automation').replace('جارٍ تحميل وصلة…','Loading Wasla…').replace('انتقل للمحتوى','Skip to content')
+        source=source.replace('lang="ar" dir="rtl"','lang="en" dir="ltr"').replace('Labbily | المحادثات والأتمتة','Labbily | Conversations and automation').replace('جارٍ تحميل Labbily…','Loading Labbily…').replace('انتقل للمحتوى','Skip to content')
     catalog_items = SERVICES_EN if en else SERVICES
     service_id = path.removeprefix('services/') if path.startswith('services/') else None
     solution = next((item for item in catalog_items if item['id'] == service_id), None)

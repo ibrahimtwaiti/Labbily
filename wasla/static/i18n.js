@@ -11,5 +11,5 @@ function languageLink(){const url=new URL(location.href);url.searchParams.set('l
 if(LANG==='en'){
  document.querySelector('.skip').textContent='Skip to content';
  if (!document.querySelector('link[rel="canonical"]')) document.querySelector('meta[name="description"]').content='Conversation management, automation and customer service solutions.';
- document.querySelector('.loading').textContent='Loading Wasla…';
+ document.querySelector('.loading').textContent='Loading Labbily…';
 }
