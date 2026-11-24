@@ -27,6 +27,8 @@ FIELDS={
  'META_SIGNUP_MODE':('Signup mode: disabled, test or enabled after review','text'),
  'META_TEST_TENANTS':('Test workspace IDs, comma separated','text'),
  'META_SYSTEM_USER_TOKEN':('System user token for token inspection','secret'),
+ 'LABBILY_OPENAI_KEY':('OpenAI API key for approved workspaces','secret'),
+ 'LABBILY_OPENAI_MODEL':('Approved OpenAI Responses model ID','text'),
  'META_APP_SECRET':('WhatsApp app secret','secret'),
  'META_VERIFY_TOKEN':('Webhook verification token','secret'),
  'INSTAGRAM_APP_ID':('Instagram app ID','text'),

@@ -51,7 +51,7 @@ def decide(cfg, question, context=None):
         result=rule['action'] if match else rule.get('otherwise','continue')
         if result=='continue':continue
         if result=='knowledge':break
-        if result=='followup' and 'followup' not in cfg.get('tools',[]):result='handover'
+        if result in ('followup','availability','order') and result not in cfg.get('tools',[]):result='handover'
         return {'kind':result,'reason':'workflow_'+str(index+1),'answer':'','source':''}
     if any(normalized(w) in query for w in FOLLOW) and 'followup' in cfg.get('tools',[]):
         return {'kind':'followup','reason':'followup_requested','answer':'','source':''}
@@ -108,6 +108,12 @@ def handle_inbound(db,account,ticket_id,message_id,body,stamp):
     if not reserve(db,tid,limits(db,tid)['monthly_runs']):
         decision={'kind':'handover','reason':'usage_limit','answer':'','source':''}
     kind=decision['kind']
+    policy_limits=limits(db,tid)
+    if ((kind in ('availability','order')) or
+        (decision['reason']=='no_reliable_source' and cfg.get('model_routing') and policy_limits['external_enabled'])):
+        from .agent_jobs import enqueue_job
+        enqueue_job(db,t,d,message_id,kind if kind in ('availability','order') else 'model')
+        return
     # Never transform a fuzzy retrieval match or an uncertain system result into an automatic send.
     run_id=uid()
     mid=uid()

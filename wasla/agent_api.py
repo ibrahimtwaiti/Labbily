@@ -1,6 +1,6 @@
 """Agent Studio routes on the existing authenticated API."""
 import json
-import os
+from .runtime_configuration import value as configured
 import time
 from typing import Annotated, Literal
 import httpx
@@ -26,7 +26,7 @@ class Source(Input):
 class Rule(Input):
     field:Literal['text','channel','language','priority']
     value:Tiny
-    action:Literal['knowledge','handover','followup']
+    action:Literal['knowledge','handover','followup','availability','order']
     otherwise:Literal['continue','knowledge','handover']='continue'
 
 class Playbook(Input):
@@ -36,7 +36,8 @@ class Playbook(Input):
     language:Literal['ar','en','auto']='auto'
     tone:Literal['professional','friendly','concise']='professional'
     handover_terms:list[Tiny]=Field(default_factory=list,max_length=20)
-    tools:list[Literal['followup']]=Field(default_factory=list,max_length=1)
+    tools:list[Literal['followup','availability','order']]=Field(default_factory=list,max_length=3)
+    model_routing:bool=False
     document_ids:list[Tiny]=Field(default_factory=list,max_length=12)
     sources:list[Source]=Field(default_factory=list,max_length=60)
 
@@ -46,7 +47,7 @@ class Edit(Input):
 
 class Question(Input):
     question:Body
-    expected:Literal['answer','review','handover','followup']|None=None
+    expected:Literal['answer','review','handover','followup','availability','order']|None=None
     save:bool=False
     channel:Literal['whatsapp','messenger','instagram']='whatsapp'
     language:Literal['ar','en']='ar'
@@ -257,7 +258,7 @@ def copilot(ident:str,data:Assist,u=Depends(user)):
         cfg=json.loads(one(db,'SELECT config FROM agent_versions WHERE agent_id=? AND version=?',(a['id'],a['published']))['config'])
         config=engine.limits(db,tid)
         limit(db,'copilot:'+tid,60,60)
-        if remote and (not config['external_enabled'] or not os.getenv('LABBILY_OPENAI_KEY') or not os.getenv('LABBILY_OPENAI_MODEL')):
+        if remote and (not config['external_enabled'] or not configured('LABBILY_OPENAI_KEY') or not configured('LABBILY_OPENAI_MODEL')):
             raise HTTPException(409,'approved_model_required')
         if not engine.reserve(db,tid,config['monthly_runs']): raise HTTPException(429,'agent_monthly_limit')
         messages=rows(db,"SELECT body FROM service_messages WHERE ticket_id=? AND tenant_id=? AND direction='in' ORDER BY occurred_at DESC,created_at DESC,id DESC LIMIT 5",(ident,tid))
@@ -271,8 +272,8 @@ def copilot(ident:str,data:Assist,u=Depends(user)):
                   'Return only the requested revision or analysis. Operation: '+data.operation+'. Output language: '+('English' if (t['language'] if cfg['language']=='auto' else cfg['language'])=='en' else 'Arabic')+
                   '. Tone: '+cfg['tone']+'. Workspace editorial guidance: '+cfg['instructions'])
     try:
-        response=httpx.post('https://api.openai.com/v1/responses',timeout=10,headers={'Authorization':'Bearer '+os.environ['LABBILY_OPENAI_KEY']},
-          json={'model':os.environ['LABBILY_OPENAI_MODEL'],'store':False,'instructions':instructions,'input':content,'max_output_tokens':500})
+        response=httpx.post('https://api.openai.com/v1/responses',timeout=10,headers={'Authorization':'Bearer '+configured('LABBILY_OPENAI_KEY')},
+          json={'model':configured('LABBILY_OPENAI_MODEL'),'store':False,'instructions':instructions,'input':content,'max_output_tokens':500})
         response.raise_for_status()
         result=response.json()
         answer=''.join(p['text'] for item in result['output'] if item.get('type')=='message' for p in item.get('content',[]) if p.get('type')=='output_text')

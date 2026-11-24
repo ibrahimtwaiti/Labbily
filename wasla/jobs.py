@@ -10,7 +10,8 @@ def tick(max_jobs=20,max_seconds=18):
     from .privacy import process_deletion
     from .meta_data import process_lead
     from .page_posts import process_post
-    tasks=[('inbound',process_event),('outbound',send_outbox),('media',process_media),('legacy',process_one),('email',process_email),('deletions',process_deletion),('leads',process_lead),('page_posts',process_post)]
+    from .agent_jobs import process_job
+    tasks=[('agents',process_job),('inbound',process_event),('outbound',send_outbox),('media',process_media),('legacy',process_one),('email',process_email),('deletions',process_deletion),('leads',process_lead),('page_posts',process_post)]
     cleanup_expired_security_metadata()
     result={name:0 for name,_ in tasks};end=time.monotonic()+max_seconds;empty=0
     for _ in range(max_jobs+len(tasks)):
@@ -21,7 +22,7 @@ def tick(max_jobs=20,max_seconds=18):
         name,fn=tasks[index%len(tasks)]
         if fn():
             result[name]+=1;empty=0
-            if name in {'email','deletions','media'}:break # Multipart network work uses its own bounded timeouts.
+            if name in {'email','deletions','media','agents'}:break # Multipart network work uses its own bounded timeouts.
         else:
             empty+=1
             if empty>=len(tasks):break

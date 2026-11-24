@@ -609,7 +609,7 @@ def sitemap(request:Request):
 
 from .service_api import router as service_router
 from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding, meta_lifecycle, saas, meta_pages, email_verification, privacy, meta_data, messenger_metrics, page_posts, api_docs
-from . import agent_api, agent_knowledge, inbox_workspace
+from . import agent_api, agent_knowledge, inbox_workspace, agent_jobs
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')
@@ -654,6 +654,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 @app.exception_handler(RequestValidationError)
 async def safe_validation(request,exc):
-    if request.url.path.startswith('/api/v2/meta/') or '/meta-data/' in request.url.path or request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/v2/privacy'):
+    if request.url.path.startswith('/api/v2/agent-connections/') or request.url.path.startswith('/api/v2/meta/') or '/meta-data/' in request.url.path or request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/v2/privacy'):
         return JSONResponse({'detail':'invalid_meta_request'},status_code=422)
     return await request_validation_exception_handler(request,exc)

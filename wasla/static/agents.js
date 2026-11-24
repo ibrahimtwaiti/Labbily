@@ -3,7 +3,7 @@ const studioLabel=sv('وكلاء الذكاء الاصطناعي','AI agents');
 for(const role of ['admin','supervisor']) menus[role].splice(2,0,['agents',studioLabel,'✦']);
 menus.provider.push(['agentpolicy',sv('إتاحة الوكلاء','Agent access'),'✦']);
 const agentWords={
- rules:['الأتمتة','Automation'],draft:['مسودة','Draft'],published:['منشور','Published'],paused:['متوقف','Paused'],archived:['مؤرشف','Archived'],
+ actions:['الأدوات','Actions'],order:['استعلام عن طلب','Order lookup'],availability:['المواعيد المتاحة','Appointment availability'],pending:['قيد المعالجة','Processing'],canceled:['ألغي بعد تغيّر المحادثة','Canceled after ownership change'],rules:['الأتمتة','Automation'],draft:['مسودة','Draft'],published:['منشور','Published'],paused:['متوقف','Paused'],archived:['مؤرشف','Archived'],
  answer:['إجابة موثقة','Grounded answer'],review:['مطابقة تحتاج مراجعة','Review match'],handover:['تحويل للموظف','Human handover'],followup:['متابعة بشرية','Follow-up'],
  auto_queued:['رد الوكيل','Agent reply'],suggestion:['مسودة الوكيل','Agent suggestion'],internal:['ملاحظة الوكيل','Agent note'],
  suggest:['اقتراح للمراجعة','Suggested reply'],auto:['رد آلي','Automatic reply'],hybrid:['رد وتحويل','Hybrid'],build:['دليل العمل','Playbook'],
@@ -75,23 +75,25 @@ async function agentStudioView(main,selected=null,tab='build'){
  if(!a){root.innerHTML=empty(sv('اختر وكيلًا أو أنشئ مسودة','Select an agent or create a draft'));return}
  root.before(Object.assign(document.createElement('h2'),{textContent:a.name}));
  const tabs=document.createElement('nav');tabs.className='agent-tabs';tabs.setAttribute('aria-label',studioLabel);root.before(tabs);
- for(const k of ['build','knowledge','rules','playground','deploy','analytics']){
+ for(const k of ['build','knowledge','actions','rules','playground','deploy','analytics']){
   const btn=document.createElement('button');btn.type='button';btn.textContent=aw(k);btn.setAttribute('aria-pressed',String(k===tab));btn.onclick=studioActions(main,()=>refresh(selected,k));tabs.append(btn)
  }
  const base='/v2/agents/'+a.id,cfg=a.draft;
  const save=async value=>{await send(base,'PUT',{revision:a.revision,config:value});await refresh()};
  if(tab==='build'){
   root.innerHTML=studioForm('agent-build',field('name',sv('اسم الوكيل','Agent name'),'text',cfg.name)+area('instructions',sv('تعليمات الصياغة للمساعد','Copilot editorial playbook'),cfg.instructions,false)+select('language',sv('اللغة','Language'),[['auto',sv('لغة العميل','Customer language')],['ar','العربية'],['en','English']],cfg.language)+select('tone',sv('النبرة','Tone'),[['professional',sv('مهنية','Professional')],['friendly',sv('ودية','Friendly')],['concise',sv('مختصرة','Concise')]],cfg.tone)+area('terms',sv('عبارات التحويل للموظف، كل عبارة في سطر','Handover phrases, one per line'),cfg.handover_terms.join('\n'),false)+select('follow',sv('إنشاء مهمة عند طلب المتابعة','Create a task when follow-up is requested'),[['0',sv('معطل','Off')],['1',sv('مسموح','Allowed')]],String(Number(cfg.tools.includes('followup')))),sv('حفظ المسودة','Save draft'));
-  bindForm(root.querySelector('form'),d=>save({...cfg,name:d.name,instructions:d.instructions,language:d.language,tone:d.tone,handover_terms:d.terms.split('\n').map(x=>x.trim()).filter(Boolean),tools:d.follow==='1'?['followup']:[]}));
+  bindForm(root.querySelector('form'),d=>save({...cfg,name:d.name,instructions:d.instructions,language:d.language,tone:d.tone,handover_terms:d.terms.split('\n').map(x=>x.trim()).filter(Boolean),tools:[...cfg.tools.filter(k=>k!=='followup'),...(d.follow==='1'?['followup']:[])]}));
  }else if(tab==='knowledge'){
   root.innerHTML=cfg.sources.map((s,i)=>`<details class="source-row"><summary>${esc(s.title)}</summary><p>${esc(s.answer)}</p><button type="button" class="light" data-remove="${i}">${sv('إزالة من المسودة','Remove from draft')}</button></details>`).join('')+studioForm('agent-source',field('title',sv('سؤال معتمد','Approved question'))+area('answer',sv('الإجابة المعتمدة','Approved answer'))+area('aliases',sv('صيغ أخرى للسؤال، كل صيغة في سطر','Alternative questions, one per line'),'',false),sv('إضافة إلى المعرفة','Add to knowledge'));
   root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=studioActions(root,()=>save({...cfg,sources:cfg.sources.filter((_,i)=>i!==Number(el.dataset.remove))})));
   bindForm(root.querySelector('form'),d=>save({...cfg,sources:[...cfg.sources,{title:d.title,answer:d.answer,aliases:d.aliases.split('\n').map(x=>x.trim()).filter(Boolean)}]}));
   await mountKnowledge(root,cfg,save,refresh);
+ }else if(tab==='actions'){
+  await agentToolsView(root,cfg,save,refresh);
  }else if(tab==='rules'){
   await renderRules(root,cfg,save);
  }else if(tab==='playground'){
-  root.innerHTML=studioForm('agent-play',area('question',sv('رسالة المحاكاة','Simulated customer message'))+select('channel',sv('قناة المحاكاة','Simulated channel'),['whatsapp','instagram','messenger'])+select('language',sv('لغة المحاكاة','Test language'),['ar','en'])+select('priority',sv('أولوية المحاكاة','Test priority'),['normal','low','high','urgent'])+select('expected',sv('حفظ كحالة اختبار','Save as a test case'),[['',sv('تجربة فقط','Run once')],...agentOpts(['answer','review','handover','followup'])]),sv('اختبر المسودة','Test draft'))+'<output class="agent-preview" aria-live="polite"></output>'+a.scenarios.map(c=>`<p>${esc(c.question)} · ${aw(c.expected)} <button class="light small" data-case="${esc(c.id)}">${sv('إزالة','Remove')}</button></p>`).join('');
+  root.innerHTML=studioForm('agent-play',area('question',sv('رسالة المحاكاة','Simulated customer message'))+select('channel',sv('قناة المحاكاة','Simulated channel'),['whatsapp','instagram','messenger'])+select('language',sv('لغة المحاكاة','Test language'),['ar','en'])+select('priority',sv('أولوية المحاكاة','Test priority'),['normal','low','high','urgent'])+select('expected',sv('حفظ كحالة اختبار','Save as a test case'),[['',sv('تجربة فقط','Run once')],...agentOpts(['answer','review','handover','followup','availability','order'])]),sv('اختبر المسودة','Test draft'))+'<output class="agent-preview" aria-live="polite"></output>'+a.scenarios.map(c=>`<p>${esc(c.question)} · ${aw(c.expected)} <button class="light small" data-case="${esc(c.id)}">${sv('إزالة','Remove')}</button></p>`).join('');
   bindForm(root.querySelector('form'),async d=>{const r=await send(base+'/playground','POST',{...d,save:!!d.expected,expected:d.expected||null});if(d.expected)await refresh();const o=main.querySelector('.agent-preview');o.textContent=[aw(r.kind),r.answer,r.source,sv('زمن التنفيذ','Duration')+' '+r.elapsed_ms+' ms',sv('حالات الاختبار الناجحة','Saved scenarios passing')+': '+(r.scenarios_passed?'✓':'—')].filter(Boolean).join('\n')});
   root.querySelectorAll('[data-case]').forEach(el=>el.onclick=studioActions(root,async()=>{await send(base+'/scenarios/'+el.dataset.case,'DELETE',{});await refresh()}));
  }else if(tab==='deploy'){
@@ -142,7 +144,7 @@ function inboxTicketActions(main,t){
 async function renderRules(root,cfg,save){
  const rules=cfg.rules||[];
  const fields=[['text',sv('نص الرسالة','Message contains')],['channel',sv('القناة','Channel')],['language',sv('اللغة','Language')],['priority',sv('الأولوية','Priority')]];
- const actions=[['knowledge',aw('knowledge')],...agentOpts(['handover','followup'])];
+ const actions=[['knowledge',aw('knowledge')],...agentOpts(['handover','followup','availability','order'])];
  root.innerHTML=`<p>${sv('تُقيَّم القواعد بالترتيب عند وصول الرسالة. اسحب لتغيير الترتيب أو استخدم الأسهم.','Rules run in order on incoming messages. Drag or use the arrows to reorder.')}</p>`+rules.map((r,i)=>`<div draggable="true" data-rule="${i}" class="rule-block"><strong>${esc(fields.find(f=>f[0]===r.field)?.[1])} · ${esc(r.value)}</strong><span>↳ ${aw(r.action)} · ${sv('وإلا','Else')} ${r.otherwise==='continue'?sv('القاعدة التالية','Next rule'):aw(r.otherwise)}</span><div><button class="light small" data-move="-1" aria-label="${sv('أعلى','Move up')}" ${i===0?'disabled':''}>↑</button><button class="light small" data-move="1" aria-label="${sv('أسفل','Move down')}" ${i===rules.length-1?'disabled':''}>↓</button><button class="light small" data-remove-rule>${sv('إزالة','Remove')}</button></div></div>`).join('')+
  studioForm('rule-form',select('field',sv('إذا كان','If'),fields)+field('value',sv('القيمة','Value'))+select('action',sv('نفّذ','Then'),actions)+select('otherwise',sv('وإلا','Else'),[['continue',sv('القاعدة التالية','Next rule')],...agentOpts(['knowledge','handover'])]),sv('إضافة قاعدة للمسودة','Add draft rule'));
  const move=(i,j)=>{if(i===j||j<0||j>=rules.length)return;const next=[...rules];next.splice(j,0,...next.splice(i,1));return save({...cfg,rules:next})};
@@ -153,6 +155,16 @@ async function renderRules(root,cfg,save){
   el.querySelector('[data-remove-rule]').onclick=studioActions(root,()=>save({...cfg,rules:rules.filter((_,n)=>i!==n)}));
  });
  bindForm(root.querySelector('form'),r=>save({...cfg,rules:[...rules,r]}));
+}
+async function agentToolsView(root,cfg,save,refresh){
+ const connections=await api('/v2/agent-connections');
+ const yesno=[['0',sv('معطل','Off')],['1',sv('مسموح','Allowed')]];
+ root.innerHTML=studioForm('allowed-tools',select('model_routing',sv('استخدام النموذج المعتمد لمطابقة الأسئلة غير المعروفة','Use the approved model to match unfamiliar questions'),yesno,String(Number(!!cfg.model_routing)))+['followup','availability','order'].map(k=>select(k,aw(k),yesno,String(Number(cfg.tools.includes(k))))).join(''),sv('حفظ صلاحيات المسودة','Save draft permissions'))+
+ `<h3>${sv('الأنظمة المرتبطة بالشركة','Workspace connections')}</h3>`+connections.map(c=>`<p><strong>${aw(c.kind)}</strong> · <bdi>${esc(c.endpoint)}</bdi> ${me.role==='admin'?`<button type="button" class="light" data-disconnect="${esc(c.kind)}">${sv('فصل','Disconnect')}</button>`:''}</p>`).join('')+
+ (me.role==='admin'?studioForm('connect-tool',select('kind',sv('نوع الاستعلام','Lookup type'),agentOpts(['availability','order']))+field('endpoint',sv('رابط واجهة القراءة HTTPS','Read-only HTTPS endpoint'),'url')+`<label class="field">${sv('رمز الوصول، إن تطلبه النظام','Bearer token, if required')}<input type="password" autocomplete="off" name="token"></label>`,sv('حفظ الاتصال','Save connection')):'');
+ bindForm(root.querySelector('#allowed-tools'),d=>save({...cfg,model_routing:d.model_routing==='1',tools:['followup','availability','order'].filter(k=>d[k]==='1')}));
+ if(root.querySelector('#connect-tool'))bindForm(root.querySelector('#connect-tool'),async d=>{await send('/v2/agent-connections/'+d.kind,'PUT',{endpoint:d.endpoint,token:d.token});await refresh()});
+ root.querySelectorAll('[data-disconnect]').forEach(b=>b.onclick=studioActions(root,async()=>{await send('/v2/agent-connections/'+b.dataset.disconnect,'DELETE',{});await refresh()}));
 }
 async function mountKnowledge(root,cfg,save,refresh){
  const docs=await api('/v2/agent-knowledge');
