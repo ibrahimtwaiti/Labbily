@@ -23,7 +23,7 @@ button:disabled, button:disabled:hover { background: var(--ui-disabled); color: 
 .error:not(:empty)::before { background-image: url('/static/labbily/digital/light/error.svg'); }
 .success::before { background-image: url('/static/labbily/digital/light/success.svg'); }
 .loading::before { background-image: url('/static/labbily/loading.svg'); }
-.state-art { width: 52px; height: auto; }
+.empty .state-art { display: block; width: 88px; max-width: 100%; height: auto; margin: 0 auto 14px; }
 .brand-logo, .sidebar .brand-logo { box-sizing: content-box; width: var(--logo-width); height: auto; padding: max(var(--logo-padding), 9px); overflow: visible; }
 .brand-logo img.wordmark, .sidebar .brand-logo img.wordmark { width: 100%; height: auto; display: block; }
 .brand-logo img.brand-symbol { display: none; }
@@ -225,7 +225,15 @@ th, td { text-align: start; padding-block: 12px; font-variant-numeric: tabular-n
 .app-main { color:var(--night-text); }
 .app-main .page-heading p { color:var(--night-muted); }
 .app-main :is(.card,.notice,.table-scroll,.service-thread,.stat,.kanban-column,.chat,.conversation-list,.project,.inbox,.login,.empty) { color:var(--brand-ink); }
-.app-main > .empty { background:white; border-radius:var(--radius); }
+.app-main .empty { background: #fff; border-radius: var(--radius); }
+.app-main .empty h3 { color: var(--brand-ink); margin: 0; }
+.app-main .empty p { color: #475569; margin: 8px auto 0; max-inline-size: 52ch; }
+#contacts-table > .empty { padding: clamp(32px, 6vw, 68px) 20px; border: 1px solid #dbe2f0; }
+.app-layout[data-view=contacts] .toolbar .outline { color: var(--night-text); background: var(--night-panel); border-color: #8998b7; }
+.app-layout[data-view=contacts] .toolbar .outline:hover { background: #263452; border-color: var(--night-text); }
+.app-layout[data-view=contacts] .toolbar .outline:focus-visible { outline-color: var(--brand-accent); }
+.app-layout[data-view=contacts] .search { max-inline-size: 100%; color: var(--brand-ink); }
+.app-layout[data-view=contacts] .search::placeholder { color: #526079; opacity: 1; }
 .app-main .toolbar > label, .app-main > .service-toolbar .field { color:var(--night-text); }
 .app-main :is(.service-kpis,.stats) > div { color:var(--brand-ink); }
 .app-main > .card { margin-block-end:18px; }
