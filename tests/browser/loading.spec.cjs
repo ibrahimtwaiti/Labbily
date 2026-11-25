@@ -30,9 +30,17 @@ test('provider sees one branded indicator through initial load and concurrent re
   const refresh=page.locator('#integration-refresh');
   await expect(refresh).toBeVisible();
   const first=gate(),last=gate();
-  await page.route('**/api/admin/integrations',async route=>{await first.waiting;await route.continue()},{times:1});
-  await page.route('**/api/admin/tenants',async route=>{await last.waiting;await route.continue()},{times:1});
+  // Keep interception installed while both requests are in flight.
+  const bothStarted=gate(),started=new Set();
+  await page.route(/\/api\/admin\/(integrations|tenants)$/,async route=>{
+    const resource=route.request().url().split('/').pop();
+    started.add(resource);
+    if(started.size===2)bothStarted.release();
+    await (resource==='integrations'?first:last).waiting;
+    await route.continue();
+  });
   await refresh.click();
+  await bothStarted.waiting;
   const chip=page.locator('.request-activity');
   await expectBubble(chip);
   const received=page.waitForResponse(response=>response.url().endsWith('/api/admin/integrations'));
