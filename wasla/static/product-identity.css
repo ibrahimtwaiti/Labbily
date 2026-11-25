@@ -16,13 +16,12 @@ button:disabled, button:disabled:hover { background: var(--ui-disabled); color: 
 .field :is(input, select, textarea), .search, .service-toolbar > :is(input,select) { border: 1px solid #747a88; color: var(--ink); background: white; }
 .field :is(input,textarea)::placeholder, .service-toolbar input::placeholder { color: var(--neutral-400); }
 .field :user-invalid { border: 2px solid var(--danger); }
-.error:not(:empty)::before, .success::before, .loading::before {
+.error:not(:empty)::before, .success::before {
   content: ''; display: inline-block; width: 22px; height: 22px; vertical-align: middle;
   margin-inline-end: 8px; background: center / contain no-repeat;
 }
 .error:not(:empty)::before { background-image: url('/static/labbily/digital/light/error.svg'); }
 .success::before { background-image: url('/static/labbily/digital/light/success.svg'); }
-.loading::before { background-image: url('/static/labbily/loading.svg'); }
 .empty .state-art { display: block; width: 88px; max-width: 100%; height: auto; margin: 0 auto 14px; }
 .brand-logo, .sidebar .brand-logo { box-sizing: content-box; width: var(--logo-width); height: auto; padding: max(var(--logo-padding), 9px); overflow: visible; }
 .brand-logo img.wordmark, .sidebar .brand-logo img.wordmark { width: 100%; height: auto; display: block; }

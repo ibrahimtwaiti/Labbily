@@ -8,7 +8,7 @@ function metaSdk(appId,version){
   script.onerror=()=>{metaSdkPromise=null;reject(new Error(sv('تعذر تحميل نافذة Meta. أعد المحاولة.','Could not load Meta. Please retry.')))};
   document.head.appendChild(script);
  });
- return metaSdkPromise;
+ return withLoading(()=>metaSdkPromise);
 }
 const originalChannelsView=channelsView;
 channelsView=async function(main){
