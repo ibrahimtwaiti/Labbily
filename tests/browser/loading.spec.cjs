@@ -13,7 +13,7 @@ async function expectBubble(element){
 
 test('provider sees one branded indicator through initial load and concurrent refresh',async({page})=>{
   const startup=gate();
-  await page.route('**/api/catalog?*',async route=>{await startup.waiting;await route.continue()},{times:1});
+  await page.route('**/api/catalog?*',async route=>{await startup.waiting;await route.continue()});
   await page.goto('/login?lang=ar');
   await expectBubble(page.locator('#app .loading'));
   startup.release();
@@ -22,7 +22,7 @@ test('provider sees one branded indicator through initial load and concurrent re
   await page.locator('button[type=submit]').click();
   await page.waitForURL('**/app');
   const integration=gate();
-  await page.route('**/api/admin/integrations',async route=>{await integration.waiting;await route.continue()},{times:1});
+  await page.route('**/api/admin/integrations',async route=>{await integration.waiting;await route.continue()});
   await page.goto('/app/integrations?lang=ar');
   await expectBubble(page.locator('.app-main .loading'));
   await expect(page.locator('.request-activity:visible')).toHaveCount(0);
