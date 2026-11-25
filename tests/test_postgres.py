@@ -36,6 +36,19 @@ class PostgreSQLAcceptance(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         os.environ.clear(); os.environ.update(cls.old)
+    def test_agent_usage_cap_with_concurrent_workers(self):
+        from wasla.agent_engine import month, reserve
+        def attempt(_):
+            with transaction() as db:
+                return reserve(db,self.a,3)
+        with ThreadPoolExecutor(max_workers=8) as workers:
+            self.assertEqual(sum(workers.map(attempt,range(12))),3)
+        with transaction() as db:
+            self.assertTrue(reserve(db,self.b,1))
+            self.assertFalse(reserve(db,self.b,1))
+            usage=db.execute('SELECT runs FROM agent_usage WHERE tenant_id=? AND month=?',(self.a,month())).fetchone()
+            self.assertEqual(usage[0],3)
+
     def test_connect_migration_and_legacy_index_access(self):
         self.assertTrue(postgres())
         with transaction() as db:

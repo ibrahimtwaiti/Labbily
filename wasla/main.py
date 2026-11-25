@@ -42,7 +42,7 @@ app=FastAPI(title='Wasla API',version='2.0.0-rc.4',lifespan=lifespan,docs_url=No
 @app.middleware('http')
 async def protect(request, call_next):
     if request.method in {'POST','PATCH','PUT','DELETE'}:
-        if len(await request.body())>(8*1024*1024 if request.url.path.startswith('/api/v2/tickets/') and request.url.path.endswith('/attachments') else 2200000 if request.url.path=='/api/admin/brand' else 65536):
+        if len(await request.body())>(8*1024*1024 if request.url.path.startswith('/api/v2/tickets/') and request.url.path.endswith('/attachments') else 2200000 if request.url.path in ('/api/admin/brand','/api/v2/agent-knowledge/import') else 512000 if request.url.path.startswith('/api/v2/agents/') and request.method=='PUT' else 65536):
             return JSONResponse({'detail':'حجم الطلب أكبر من المسموح'},413)
         if not (request.url.path.startswith('/api/webhooks/') or request.url.path == '/api/internal/drain-webhooks'):
             origin=('https://' + request.headers.get('host','') if os.getenv('VERCEL_ENV') in ('preview','production') else os.getenv('WASLA_ORIGIN','http://localhost:8000'))
@@ -609,6 +609,7 @@ def sitemap(request:Request):
 
 from .service_api import router as service_router
 from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding, meta_lifecycle, saas, meta_pages, email_verification, privacy, meta_data, messenger_metrics, page_posts, api_docs
+from . import agent_api, agent_knowledge, inbox_workspace, agent_jobs, agent_retrieval
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')
@@ -653,6 +654,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 @app.exception_handler(RequestValidationError)
 async def safe_validation(request,exc):
-    if request.url.path.startswith('/api/v2/meta/') or '/meta-data/' in request.url.path or request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/v2/privacy'):
+    if request.url.path.startswith('/api/v2/agent-connections/') or request.url.path.startswith('/api/v2/meta/') or '/meta-data/' in request.url.path or request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/v2/privacy'):
         return JSONResponse({'detail':'invalid_meta_request'},status_code=422)
     return await request_validation_exception_handler(request,exc)

@@ -1,5 +1,6 @@
 """Tenant-scoped queue health; only aggregate counts leave this module."""
 import time
+from datetime import datetime
 from .db import transaction, rows
 from .service import settings
 
@@ -16,8 +17,12 @@ def queue_health(tenant_id, clock=None, max_age=300):
         deletions=rows(db,"SELECT state,created_at,next_attempt FROM deletion_jobs WHERE tenant_id=? AND state!='completed'",(tenant_id,))
         leads=rows(db,"SELECT state,created_at,next_attempt,next_attempt-120 claimed_at FROM meta_lead_events WHERE tenant_id=? AND state!='done'",(tenant_id,))
         posts=rows(db,"SELECT state,created_at,next_attempt,claimed_at FROM meta_page_posts WHERE tenant_id=? AND state!='published'",(tenant_id,))
+        agents=rows(db,"SELECT state,created_at,next_attempt,claimed_at,error FROM agent_jobs WHERE tenant_id=? AND state IN ('queued','running')",(tenant_id,))
+        for row in agents:
+            row['created_at']=int(datetime.fromisoformat(row['created_at']).timestamp())
+            if row['state']=='running':row['state']='processing'
     result={}
-    for name,items,waiting in [('inbound',inbound,{'pending'}),('outbound',outbound,{'queued','retry'}),('media',media,{'pending'}),('email',mail,{'pending','retry'}),('deletions',deletions,{'pending','retry'}),('leads',leads,{'pending','retry'}),('page_posts',posts,{'queued','retry'})]:
+    for name,items,waiting in [('agents',agents,{'queued'}),('inbound',inbound,{'pending'}),('outbound',outbound,{'queued','retry'}),('media',media,{'pending'}),('email',mail,{'pending','retry'}),('deletions',deletions,{'pending','retry'}),('leads',leads,{'pending','retry'}),('page_posts',posts,{'queued','retry'})]:
         pending=[x for x in items if x['state'] in waiting]
         # A future retry is deliberately deferred, not evidence that the worker stopped.
         due=[x for x in pending if x['next_attempt']<=clock]

@@ -178,6 +178,9 @@ def process_event():
                 if e.get('media'):
                     db.execute('INSERT INTO service_media_jobs(id,tenant_id,message_id,account_id,descriptor) VALUES(?,?,?,?,?)',(uid(),tid,message_id,aid,json.dumps(e['media'])))
                     db.execute("UPDATE service_messages SET body='[مرفق قيد الجلب والفحص]' WHERE id=?",(message_id,))
+                if e['kind']=='text' and not e.get('media'):
+                    from .agent_engine import handle_inbound
+                    handle_inbound(db,a,ticket_id,message_id,str(e['body'])[:4000],stamp)
                 db.execute('UPDATE service_accounts SET last_inbound_at=? WHERE id=?',(now(),aid))
             db.execute("UPDATE service_events SET state='processed',processed_at=?,error='' WHERE id=?",(clock,eid))
         return True
@@ -235,7 +238,10 @@ def send_outbox():
             if not a: raise HTTPException(409,'tenant_suspended')
             policy(db,a,t,p)
             actor=one(db,"SELECT * FROM users WHERE id=? AND tenant_id=? AND active=1 AND role IN ('admin','supervisor','sales')",(m['author_id'],m['tenant_id']))
-            if not actor or (actor['role']=='sales' and t['assignee_id']!=actor['id']): raise HTTPException(403,'sender_permission_changed')
+            if 'agent_id' in p:
+                from .agent_engine import dispatch_allowed
+                if not dispatch_allowed(db,t,a,p): raise HTTPException(409,'agent_ownership_changed')
+            elif not actor or (actor['role']=='sales' and t['assignee_id']!=actor['id']): raise HTTPException(403,'sender_permission_changed')
         except HTTPException as e:
             db.execute("UPDATE service_outbox SET state='blocked',error=? WHERE id=?",(str(e.detail),o['id']))
             db.execute("UPDATE service_messages SET status='blocked' WHERE id=?",(m['id'],)); return True
@@ -290,7 +296,7 @@ def send_outbox():
         if reauth: db.execute("UPDATE service_accounts SET state='reauthorize' WHERE id=? AND state!='disconnected'",(a['id'],))
         if pid:
             db.execute('UPDATE service_accounts SET last_outbound_at=? WHERE id=?',(now(),a['id']))
-            db.execute('UPDATE service_tickets SET first_human_at=COALESCE(first_human_at,?) WHERE id=?',(int(time.time()),t['id']))
+            if 'agent_id' not in p: db.execute('UPDATE service_tickets SET first_human_at=COALESCE(first_human_at,?) WHERE id=?',(int(time.time()),t['id']))
             for event in rows(db,'SELECT * FROM service_status_history WHERE account_id=? AND provider_id=? ORDER BY occurred_at',(a['id'],pid)):
                 apply_status(db,a['id'],pid,event['status'],event['occurred_at'])
             if a['channel']=='messenger':

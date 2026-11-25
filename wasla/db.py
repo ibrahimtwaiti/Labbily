@@ -124,6 +124,26 @@ def migrate():
                 for statement in (ROOT / 'migrations/011_completion.sql').read_text().split(';'):
                     if statement.strip(): conn.execute(statement)
 
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=11').fetchone() is None:
+                for statement in (ROOT / 'migrations/012_agent_studio.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
+
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=12').fetchone() is None:
+                for statement in (ROOT / 'migrations/013_conversation_workspace.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
+
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=13').fetchone() is None:
+                for statement in (ROOT / 'migrations/014_agent_jobs.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
+
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=14').fetchone() is None:
+                for statement in (ROOT / 'migrations/015_agent_retrieval.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
+
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=15').fetchone() is None:
+                for statement in (ROOT / 'migrations/016_agent_action_approval.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
+
 def initialize():
     if postgres():
         with transaction() as db:
@@ -147,6 +167,16 @@ def initialize():
                 raise RuntimeError('Facebook Pages migration missing: python -m wasla.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=10'):
                 raise RuntimeError('Completion migration missing: python -m wasla.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=11'):
+                raise RuntimeError('Agent Studio migration missing: python -m wasla.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=12'):
+                raise RuntimeError('Conversation workspace migration missing: python -m wasla.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=13'):
+                raise RuntimeError('Agent jobs migration missing: python -m wasla.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=14'):
+                raise RuntimeError('Agent retrieval migration missing: python -m wasla.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=15'):
+                raise RuntimeError('Action approval migration missing: python -m wasla.cli init')
         return
     Path(path()).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path()) as db:
@@ -191,6 +221,16 @@ def initialize():
                 raise
         if not db.execute("SELECT version FROM schema_migrations WHERE version=10").fetchone():
             db.executescript('BEGIN IMMEDIATE;'+(ROOT / 'migrations/011_completion.sql').read_text()+'COMMIT;')
+        if not db.execute('SELECT version FROM schema_migrations WHERE version=11').fetchone():
+            db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/012_agent_studio.sql').read_text() + 'COMMIT;')
+        if not db.execute('SELECT version FROM schema_migrations WHERE version=12').fetchone():
+            db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/013_conversation_workspace.sql').read_text() + 'COMMIT;')
+        if not db.execute('SELECT version FROM schema_migrations WHERE version=13').fetchone():
+            db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/014_agent_jobs.sql').read_text() + 'COMMIT;')
+        if not db.execute('SELECT version FROM schema_migrations WHERE version=14').fetchone():
+            db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/015_agent_retrieval.sql').read_text() + 'COMMIT;')
+        if not db.execute('SELECT version FROM schema_migrations WHERE version=15').fetchone():
+            db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/016_agent_action_approval.sql').read_text() + 'COMMIT;')
 
 def audit(db, user, action, entity, detail=''):
     db.execute('INSERT INTO audit VALUES(?,?,?,?,?,?,?)',
