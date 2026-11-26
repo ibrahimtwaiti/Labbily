@@ -26,7 +26,7 @@ from labbily import email_verification, privacy
 from labbily.db import one, now, transaction, uid
 from labbily.service_oauth import cipher
 
-ORIGIN = 'https://labbily-git-feat-meta-provider-readiness-al-habib-center.vercel.app'
+ORIGIN = 'https://wasla-git-feat-meta-provider-readiness-al-habib-center.vercel.app'
 DATABASE_HOST = 'ep-holy-breeze-b98rfxye.c-7.eu-central-1.aws.neon.tech'
 MAIL_PORT = 18025
 

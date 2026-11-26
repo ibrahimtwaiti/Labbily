@@ -1,6 +1,7 @@
 'use strict';
 const languageQuery=new URLSearchParams(location.search).get('lang');
-const languageCookie=document.cookie.split('; ').find(c=>c.startsWith('labbily_lang='))?.split('=')[1];
+const cookies=document.cookie.split('; ');
+const languageCookie=(cookies.find(c=>c.startsWith('labbily_lang='))||cookies.find(c=>c.startsWith('wasla_lang=')))?.split('=')[1];
 const LANG=['ar','en'].includes(languageQuery)?languageQuery:(languageCookie==='en'?'en':'ar');
 document.cookie='labbily_lang='+LANG+'; Path=/; Max-Age=31536000; SameSite=Lax'+(location.protocol==='https:'?'; Secure':'');
 document.documentElement.lang=LANG;
