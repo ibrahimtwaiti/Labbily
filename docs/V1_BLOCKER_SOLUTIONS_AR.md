@@ -5,7 +5,7 @@
 ## 1. حماية main: مغلقة بعد تحقق الإعداد
 استورد المالك القواعد، وتحققنا في 13 نوفمبر 2026 من Ruleset 27158032: active على refs/heads/main، وPR مطلوب، وفحوص acceptance/postgres/browser مع strict، ومنع الحذف وforce-push دون bypass actors. GitHub يعرض protected=true.
 لم ننفذ دفعًا مخالفًا أو دمجًا تجريبيًا. لا تعِد استيراد القواعد.
-https://github.com/ibrahimtwaiti/Wasla/rules/27158032
+https://github.com/ibrahimtwaiti/Labbily/rules/27158032
 
 ## 2. النسخ: مسار خارجي مستقل بدل حذف النسخة الوحيدة
 المسار الذي اختاره المالك هو Cloudflare R2 خاص دون تشفير age + المهمة الموجودة backup.yml، دون الاعتماد على زيادة حصة snapshots.

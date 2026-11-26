@@ -13,7 +13,7 @@ def meta_gate(tenant_id,service):
     raise HTTPException(409,'meta_signup_pending_provider_configuration_and_approval')
 
 def signup_policy():
-    mode=value('WASLA_SELF_SIGNUP_MODE','disabled')
-    terms=value('WASLA_SIGNUP_TERMS_VERSION') if mode=='enabled' else 'sandbox-v1'
-    enabled=mode=='test' or (mode=='enabled' and len(value('WASLA_SIGNUP_APPROVAL_REFERENCE').strip())>=10 and terms!='sandbox-v1' and bool(re.fullmatch(r'[A-Za-z0-9._-]{1,80}',terms)))
+    mode=value('LABBILY_SELF_SIGNUP_MODE','disabled')
+    terms=value('LABBILY_SIGNUP_TERMS_VERSION') if mode=='enabled' else 'sandbox-v1'
+    enabled=mode=='test' or (mode=='enabled' and len(value('LABBILY_SIGNUP_APPROVAL_REFERENCE').strip())>=10 and terms!='sandbox-v1' and bool(re.fullmatch(r'[A-Za-z0-9._-]{1,80}',terms)))
     return {'signup_enabled':bool(enabled),'mode':'trial' if mode=='enabled' else 'sandbox','terms_version':terms}

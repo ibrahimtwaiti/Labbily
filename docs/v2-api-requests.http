@@ -2,7 +2,7 @@
 # Never commit real cookies, API tokens, customer text or provider IDs.
 @baseUrl = http://127.0.0.1:8000
 
-### Readiness (authenticated Wasla session)
+### Readiness (authenticated Labbily session)
 GET {{baseUrl}}/api/v2/readiness
 
 ### Ticket cohort report

@@ -1,6 +1,6 @@
-"""Round-trip a synthetic Wasla Staging database through encrypted R2 storage.
+"""Round-trip a synthetic Labbily Staging database through encrypted R2 storage.
 
-Needs a fresh, local wasla_restore_drill database, pg_dump, pg_restore and age.
+Needs a fresh, local labbily_restore_drill database, pg_dump, pg_restore and age.
 Use only the short-lived credential for the dedicated staging backup bucket.
 """
 
@@ -22,15 +22,15 @@ from scripts.backup_postgres import database_env
 from scripts.deletion_ledger import export_ledger
 from scripts.verify_restore import fingerprint
 from scripts.restore_postgres import restore
-from wasla import privacy
-from wasla.db import now, transaction, uid
+from labbily import privacy
+from labbily.db import now, transaction, uid
 from staging_database import exclusive_drill
 
 HOST = 'ep-holy-breeze-b98rfxye.c-7.eu-central-1.aws.neon.tech'
-BUCKET = 'wasla-v2-staging-backups'
+BUCKET = 'labbily-v2-staging-backups'
 ENDPOINT = 'https://cbd764cddd5790396878771139794161.r2.cloudflarestorage.com'
-TARGET_DB = os.environ.get('STAGING_RESTORE_DATABASE', 'wasla_restore_drill')
-if not re.fullmatch(r'wasla_restore_drill(?:_[a-z0-9]{1,32})?', TARGET_DB):
+TARGET_DB = os.environ.get('STAGING_RESTORE_DATABASE', 'labbily_restore_drill')
+if not re.fullmatch(r'labbily_restore_drill(?:_[a-z0-9]{1,32})?', TARGET_DB):
     raise ValueError('Use a dedicated local restore database')
 TARGET = 'postgresql:///' + TARGET_DB
 
@@ -72,14 +72,14 @@ def drill():
     source = os.environ['DATABASE_URL']
     uri = urlsplit(source)
     if (
-        os.environ.get('WASLA_ENV') != 'staging'
+        os.environ.get('LABBILY_ENV') != 'staging'
         or uri.hostname != HOST
-        or uri.path != '/wasla_staging'
-        or os.environ.get('WASLA_MEDIA_ENDPOINT') != ENDPOINT
+        or uri.path != '/labbily_staging'
+        or os.environ.get('LABBILY_MEDIA_ENDPOINT') != ENDPOINT
     ):
         raise RuntimeError('Dedicated Staging source required')
     with psycopg.connect(source) as db, psycopg.connect(TARGET) as target:
-        if db.execute('SELECT current_database()').fetchone()[0] != 'wasla_staging':
+        if db.execute('SELECT current_database()').fetchone()[0] != 'labbily_staging':
             raise RuntimeError('Wrong source database')
         if db.execute(
             'SELECT EXISTS (SELECT 1 FROM tenants) OR EXISTS (SELECT 1 FROM users)'
@@ -101,7 +101,7 @@ def drill():
     tenants = [uid(), uid()]
     object_key = 'drills/' + uid() + '.dump.age'
     uploaded = False
-    with tempfile.TemporaryDirectory(prefix='wasla-restore-') as folder:
+    with tempfile.TemporaryDirectory(prefix='labbily-restore-') as folder:
         root = Path(folder)
         identity, archive, encrypted, download, decrypted = [
             root / name for name in ('identity', 'archive', 'encrypted', 'download', 'restored')
@@ -173,7 +173,7 @@ def drill():
             env = {
                 'PATH': os.environ['PATH'],
                 'DATABASE_URL': TARGET,
-                'WASLA_ENV': 'restore',
+                'LABBILY_ENV': 'restore',
                 'PYTHONPATH': os.getcwd(),
             }
             command(

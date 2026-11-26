@@ -20,7 +20,7 @@ from .runtime_configuration import value as configured_value
 SCOPES={'instagram_business_basic','instagram_business_manage_messages'}
 
 def cipher():
-    try: return Fernet(os.environ['WASLA_TOKEN_ENCRYPTION_KEY'].encode())
+    try: return Fernet(os.environ['LABBILY_TOKEN_ENCRYPTION_KEY'].encode())
     except (KeyError,ValueError): raise HTTPException(503,'oauth_secret_storage_not_configured')
 
 def unseal(value):
@@ -42,14 +42,14 @@ def read_token(account):
     except InvalidToken: raise HTTPException(503,'oauth_secret_unavailable')
 
 def redirect_uri():
-    origin=configured_value('WASLA_OAUTH_ORIGIN',os.getenv('WASLA_ORIGIN','')).rstrip('/')
+    origin=configured_value('LABBILY_OAUTH_ORIGIN',os.getenv('LABBILY_ORIGIN','')).rstrip('/')
     if not origin.startswith('https://'): raise HTTPException(503,'oauth_requires_https_origin')
     return origin+'/api/v2/oauth/instagram/callback'
 
 def consume(state,request,u):
     with transaction() as db:
         row=one(db,'SELECT s.*,a.tenant_id FROM service_oauth_states s JOIN service_accounts a ON a.id=s.account_id WHERE s.state_hash=?',(digest(state),))
-        if not row or (u['role']!='provider' and row['tenant_id']!=u['tenant_id']) or row['user_id']!=u['id'] or row['session_hash']!=digest(request.cookies.get('wasla_session','')) or row['expires_at']<=int(time.time()) or row['consumed_at']:
+        if not row or (u['role']!='provider' and row['tenant_id']!=u['tenant_id']) or row['user_id']!=u['id'] or row['session_hash']!=digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))) or row['expires_at']<=int(time.time()) or row['consumed_at']:
             raise HTTPException(403,'invalid_or_expired_oauth_state')
         changed=db.execute('UPDATE service_oauth_states SET consumed_at=? WHERE state_hash=? AND consumed_at IS NULL',(int(time.time()),digest(state)))
         if changed.rowcount!=1: raise HTTPException(403,'oauth_state_already_used')
@@ -64,7 +64,7 @@ def start(ident:str,request:Request,u=Depends(user)):
         if a['channel']!='instagram': raise HTTPException(409,'instagram_login_only')
         state=secrets.token_urlsafe(32)
         db.execute('DELETE FROM service_oauth_states WHERE expires_at<?',(int(time.time())-86400,))
-        db.execute('INSERT INTO service_oauth_states VALUES(?,?,?,?,?,NULL)',(digest(state),ident,u['id'],digest(request.cookies.get('wasla_session','')),int(time.time())+600))
+        db.execute('INSERT INTO service_oauth_states VALUES(?,?,?,?,?,NULL)',(digest(state),ident,u['id'],digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))),int(time.time())+600))
         audit(db,u,'service.oauth.started',ident)
     return {'authorization_url':'https://www.instagram.com/oauth/authorize?'+urlencode({'client_id':app_id,'redirect_uri':callback,'response_type':'code','scope':','.join(sorted(SCOPES)),'state':state})}
 
@@ -72,7 +72,7 @@ def start(ident:str,request:Request,u=Depends(user)):
 def landing():
     # The first cross-site redirect carries no Strict session cookie. Resume with a
     # same-origin authenticated POST; do not weaken the existing cookie policy.
-    return HTMLResponse('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Wasla authorization</title><link rel="stylesheet" href="/static/loading.css"><p class="loading" role="status" id="oauth-status">جارٍ إكمال الربط / Completing authorization…</p><a href="/app/channels">العودة إلى القنوات / Back to channels</a><script src="/static/service-oauth.js" defer></script></html>',headers={'Referrer-Policy':'no-referrer'})
+    return HTMLResponse('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Labbily authorization</title><link rel="stylesheet" href="/static/loading.css"><p class="loading" role="status" id="oauth-status">جارٍ إكمال الربط / Completing authorization…</p><a href="/app/channels">العودة إلى القنوات / Back to channels</a><script src="/static/service-oauth.js" defer></script></html>',headers={'Referrer-Policy':'no-referrer'})
 
 @router.post('/api/v2/oauth/instagram/complete')
 def callback(data:dict,request:Request,u=Depends(user)):
@@ -188,7 +188,7 @@ def start_discovery(request:Request,u=Depends(user)):
     appid,version,callback=instagram_configuration(u);throttle(u['tenant_id']);state=secrets.token_urlsafe(32)
     with transaction() as db:
         db.execute('DELETE FROM meta_data_sessions WHERE expires_at<?',(int(time.time()),))
-        db.execute('INSERT INTO meta_data_sessions(state_hash,tenant_id,user_id,session_hash,kind,app_id,config_id,api_version,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',(digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('wasla_session','')),'instagram',appid,callback,version,int(time.time())+600))
+        db.execute('INSERT INTO meta_data_sessions(state_hash,tenant_id,user_id,session_hash,kind,app_id,config_id,api_version,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',(digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))),'instagram',appid,callback,version,int(time.time())+600))
     return {'authorization_url':'https://www.instagram.com/oauth/authorize?'+urlencode({'client_id':appid,'redirect_uri':callback,'response_type':'code','scope':','.join(sorted(SCOPES)),'state':state,'force_reauth':'true'})}
 
 def consume_discovery(state,request,u):
@@ -197,7 +197,7 @@ def consume_discovery(state,request,u):
         from .saas import lock_tenant
         lock_tenant(db,u['tenant_id'])
         row=one(db,'SELECT * FROM meta_data_sessions WHERE state_hash=?'+(' FOR UPDATE' if postgres() else ''),(digest(state),))
-        if not row or row['kind']!='instagram' or row['user_id']!=u['id'] or row['tenant_id']!=u['tenant_id'] or row['session_hash']!=digest(request.cookies.get('wasla_session','')) or row['expires_at']<=int(time.time()) or row['stage']!='started':raise HTTPException(403,'invalid_or_expired_oauth_state')
+        if not row or row['kind']!='instagram' or row['user_id']!=u['id'] or row['tenant_id']!=u['tenant_id'] or row['session_hash']!=digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))) or row['expires_at']<=int(time.time()) or row['stage']!='started':raise HTTPException(403,'invalid_or_expired_oauth_state')
         if (row['app_id'],row['api_version'],row['config_id'])!=(appid,version,callback):raise HTTPException(409,'meta_configuration_changed')
         db.execute("UPDATE meta_data_sessions SET stage='consumed' WHERE state_hash=?",(digest(state),))
     return {'id':'','tenant_id':u['tenant_id'],'api_version':version}

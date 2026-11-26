@@ -41,5 +41,5 @@ Docker build (Docker غير متوفر في بيئة العمل)، نشر TLS ح
 
 نجح workflow «V1 checks» على GitHub للـ commit `b417dc351c02a7c7cc28f2c1e9f87a7ad8a10fb1`، بحالة completed / success. هذا يثبت نجاح بيئة CI إضافة إلى الاختبارات المحلية.
 
-https://github.com/ibrahimtwaiti/Wasla/actions/runs/43221481435
+https://github.com/ibrahimtwaiti/Labbily/actions/runs/43221481435
 

@@ -23,12 +23,12 @@ class Resend(BaseModel):
     email:str=Field(min_length=3,max_length=254)
 
 def configuration():
-    mode=value('WASLA_EMAIL_MODE','disabled');origin=value('WASLA_EMAIL_ORIGIN',os.getenv('WASLA_ORIGIN','')).rstrip('/')
+    mode=value('LABBILY_EMAIL_MODE','disabled');origin=value('LABBILY_EMAIL_ORIGIN',os.getenv('LABBILY_ORIGIN','')).rstrip('/')
     p=urlparse(origin)
-    local=mode=='local' and os.getenv('WASLA_ENV')=='development' and not os.getenv('VERCEL_ENV') and p.hostname in {'localhost','127.0.0.1'}
+    local=mode=='local' and os.getenv('LABBILY_ENV')=='development' and not os.getenv('VERCEL_ENV') and p.hostname in {'localhost','127.0.0.1'}
     if mode not in {'smtp','local'} or (mode=='local' and not local):raise HTTPException(503,'email_provider_not_configured')
     if (p.scheme not in {'http','https'} or (not local and p.scheme!='https') or not p.hostname or p.username or p.password or p.path or p.query or p.fragment):raise HTTPException(503,'email_https_origin_required')
-    if mode=='smtp' and not all(value(k) for k in ('WASLA_SMTP_HOST','WASLA_SMTP_FROM','WASLA_SMTP_USER','WASLA_SMTP_PASSWORD')):raise HTTPException(503,'email_provider_not_configured')
+    if mode=='smtp' and not all(value(k) for k in ('LABBILY_SMTP_HOST','LABBILY_SMTP_FROM','LABBILY_SMTP_USER','LABBILY_SMTP_PASSWORD')):raise HTTPException(503,'email_provider_not_configured')
     cipher();return mode,origin
 
 def enqueue(db,uid_):
@@ -90,10 +90,10 @@ def process_email():
     try:
         mode,_=configuration();data=json.loads(cipher().decrypt(job['ciphertext'].encode()))
         if mode=='smtp':
-            message=EmailMessage();message['From']=value('WASLA_SMTP_FROM');message['To']=data['to'];message['Subject']='Wasla — تحقق من بريدك / Verify your email'
+            message=EmailMessage();message['From']=value('LABBILY_SMTP_FROM');message['To']=data['to'];message['Subject']='Labbily — تحقق من بريدك / Verify your email'
             message.set_content('Verify your email within one hour. If you did not request this, ignore this message.\nتحقق من بريدك خلال ساعة. تجاهل الرسالة إذا لم تطلبها.\n'+data['url'])
-            with smtplib.SMTP(value('WASLA_SMTP_HOST'),int(value('WASLA_SMTP_PORT','587')),timeout=10) as smtp:
-                smtp.starttls(context=ssl.create_default_context());smtp.login(value('WASLA_SMTP_USER'),value('WASLA_SMTP_PASSWORD'));smtp.send_message(message)
+            with smtplib.SMTP(value('LABBILY_SMTP_HOST'),int(value('LABBILY_SMTP_PORT','587')),timeout=10) as smtp:
+                smtp.starttls(context=ssl.create_default_context());smtp.login(value('LABBILY_SMTP_USER'),value('LABBILY_SMTP_PASSWORD'));smtp.send_message(message)
         with transaction() as db:db.execute("UPDATE email_jobs SET state=?,ciphertext=?,error='' WHERE id=? AND state='sending'",('sent' if mode=='smtp' else 'local','' if mode=='smtp' else job['ciphertext'],job['id']))
     except Exception:
         with transaction() as db:db.execute("UPDATE email_jobs SET state=?,error='email_delivery_failed',next_attempt=? WHERE id=? AND state='sending'",('failed' if job['attempts']>=4 else 'retry',clock+min(3600,30*2**job['attempts']),job['id']))

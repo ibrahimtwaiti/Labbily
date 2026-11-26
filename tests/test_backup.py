@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 from scripts.backup_postgres import backup, database_env, r2_settings, upload_r2, failure_classification
 
 SETTINGS = {
-    'BACKUP_DATABASE_URL': 'postgresql://u:p@db.example.test/wasla?sslmode=require&channel_binding=require',
+    'BACKUP_DATABASE_URL': 'postgresql://u:p@db.example.test/labbily?sslmode=require&channel_binding=require',
     'R2_ENDPOINT_URL': 'https://' + 'a' * 32 + '.r2.cloudflarestorage.com',
-    'R2_BUCKET': 'wasla-backups',
+    'R2_BUCKET': 'labbily-backups',
     'R2_PREFIX': 'production/postgres',
     'R2_ACCESS_KEY_ID': 'test-id',
     'R2_SECRET_ACCESS_KEY': 'test-secret',
@@ -31,14 +31,14 @@ class BackupSafety(unittest.TestCase):
         self.assertEqual(failure_classification(b'unrecognized private error', 'r2'), 'R2_OTHER')
 
     def test_credentials_are_environment_only_and_tls_required(self):
-        env = database_env('postgresql://operator:private%21@db.example.test/wasla?sslmode=require&channel_binding=require')
+        env = database_env('postgresql://operator:private%21@db.example.test/labbily?sslmode=require&channel_binding=require')
         self.assertEqual(env['PGPASSWORD'], 'private!')
-        self.assertEqual(env['PGDATABASE'], 'wasla')
+        self.assertEqual(env['PGDATABASE'], 'labbily')
         self.assertEqual(env['PGCHANNELBINDING'], 'require')
         for url in (
-            'postgresql://u:p@db-pooler.example.test/wasla',
-            'postgresql://u:p@db.example.test/wasla?sslmode=disable',
-            'postgresql://u@db.example.test/wasla?sslmode=require',
+            'postgresql://u:p@db-pooler.example.test/labbily',
+            'postgresql://u:p@db.example.test/labbily?sslmode=disable',
+            'postgresql://u@db.example.test/labbily?sslmode=require',
         ):
             with self.assertRaises(ValueError):
                 database_env(url)

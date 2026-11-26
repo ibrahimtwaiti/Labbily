@@ -7,10 +7,10 @@ from .service_api import router
 
 def schema():
     data=app.openapi()
-    data['info']['title']='Wasla V2 API'
+    data['info']['title']='Labbily V2 API'
     data['paths']={k:v for k,v in data['paths'].items() if k.startswith('/api/')}
     data.setdefault('components',{})['securitySchemes']={
-        'SessionCookie':{'type':'apiKey','in':'cookie','name':'wasla_session'},
+        'SessionCookie':{'type':'apiKey','in':'cookie','name':'labbily_session'},
         'CSRF':{'type':'apiKey','in':'header','name':'X-CSRF-Token'},
         'WorkerBearer':{'type':'http','scheme':'bearer'},
         'MetaSignature':{'type':'apiKey','in':'header','name':'X-Hub-Signature-256'}}

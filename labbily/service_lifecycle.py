@@ -47,7 +47,7 @@ def redact_one(u):
             from .service_media import client
             storage=client()
             # Block downloads before deletion. Any failed object deletion rolls back DB redaction.
-            for m in attachments:storage.delete_object(Bucket=configured_value('WASLA_MEDIA_BUCKET'),Key=m['object_key'])
+            for m in attachments:storage.delete_object(Bucket=configured_value('LABBILY_MEDIA_BUCKET'),Key=m['object_key'])
         messages=rows(db,'SELECT * FROM service_messages WHERE ticket_id=?',(tid,))
         for m in messages:
             db.execute("UPDATE service_outbox SET payload='{}' WHERE message_id=?",(m['id'],))

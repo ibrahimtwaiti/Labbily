@@ -4,8 +4,8 @@ import json
 import os
 from pathlib import Path
 
-from wasla.db import one, rows, transaction
-from wasla.privacy import process_deletion, queue
+from labbily.db import one, rows, transaction
+from labbily.privacy import process_deletion, queue
 
 
 def export_ledger():
@@ -13,13 +13,13 @@ def export_ledger():
         data = rows(db, """SELECT id,tenant_id,requester_id,scope,targets,completed_at
             FROM deletion_jobs WHERE state='completed'
             AND (source_key IS NULL OR source_key NOT LIKE 'restore:%')""")
-    return {'format': 'wasla-erasure-ledger-v1', 'deletions': data}
+    return {'format': 'labbily-erasure-ledger-v1', 'deletions': data}
 
 
 def replay_ledger(ledger, apply=False):
-    if ledger.get('format') != 'wasla-erasure-ledger-v1' or not isinstance(ledger.get('deletions'), list):
+    if ledger.get('format') != 'labbily-erasure-ledger-v1' or not isinstance(ledger.get('deletions'), list):
         raise ValueError('invalid_erasure_ledger')
-    mode = os.getenv('WASLA_ENV')
+    mode = os.getenv('LABBILY_ENV')
     if mode in {'staging', 'production'} or os.getenv('VERCEL_ENV') or (apply and mode != 'restore'):
         raise ValueError('replay_requires_isolated_restore_environment')
     jobs = []

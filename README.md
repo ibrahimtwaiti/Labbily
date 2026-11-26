@@ -1,10 +1,10 @@
-# Wasla V2 candidate
+# Labbily V2 candidate
 
 حالة استكمال التطوير والاختبارات الحالية: [DEVELOPMENT_COMPLETION_AUDIT.md](DEVELOPMENT_COMPLETION_AUDIT.md). [تشغيل التكاملات والبريد والحذف وحدود الشركات](docs/meta/COMPLETION_OPERATIONS_AR.md) و[OpenAPI الفعلي](docs/openapi.json). الأقسام الخاصة بـV1 أدناه تاريخية؛ التفعيل الحي والاعتمادات والتحصيل المالي مراحل مستقلة.
 
 مرشح خدمة العملاء متعدد القنوات قيد التحقق. راجع [تنفيذ الدليل والحدود وبوابات الإطلاق](docs/V2_GUIDE_IMPLEMENTATION_AR.md). لا يعني وجود الموصلات اكتمال الموافقات أو الاختبار الحي.
 
-# Wasla | وصلة — V1
+# Labbily | Labbily — V1
 
 منصة عربية لتأسيس تشغيل المبيعات: موقع الخدمات، طلبات العروض، مشروعات التنفيذ، مساحات الشركات والعملاء والفرص والمهام. مبنية من الصفر وفق خريطة البناء المرفقة بتاريخ 12 نوفمبر 2026.
 
@@ -34,20 +34,20 @@
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m wasla.cli init
-python -m wasla.cli bootstrap
-python -m uvicorn wasla.main:app --host 127.0.0.1 --port 8000
+python -m labbily.cli init
+python -m labbily.cli bootstrap
+python -m uvicorn labbily.main:app --host 127.0.0.1 --port 8000
 ```
 
 افتح `http://localhost:8000`؛ الدخول في `/login`. يطلب bootstrap بيانات المدير تفاعليًا دون كتابتها في ملفات أو arguments. يحتاج النموذج حساب مقدم الخدمة النشط ليقبل الطلبات.
 
-في نافذة أخرى ومع نفس متغير `WASLA_DB`:
+في نافذة أخرى ومع نفس متغير `LABBILY_DB`:
 
 ```bash
-python -m wasla.worker
+python -m labbily.worker
 ```
 
-للتطوير عبر أدوات المعاينة: `npm run dev` (لا توجد اعتماديات npm؛ ينفذ Python). هذا الأمر يعمل افتراضيًا على `127.0.0.1:8000`؛ إذا استخدمت `127.0.0.1` بدل `localhost` عيّن `WASLA_ORIGIN=http://127.0.0.1:8000` قبل التشغيل. مقارنة Origin مقصودة لحماية الطلبات.
+للتطوير عبر أدوات المعاينة: `npm run dev` (لا توجد اعتماديات npm؛ ينفذ Python). هذا الأمر يعمل افتراضيًا على `127.0.0.1:8000`؛ إذا استخدمت `127.0.0.1` بدل `localhost` عيّن `LABBILY_ORIGIN=http://127.0.0.1:8000` قبل التشغيل. مقارنة Origin مقصودة لحماية الطلبات.
 
 ## تشغيل Docker
 
@@ -56,17 +56,17 @@ cp .env.example .env
 # عدّل البيئة والنطاق في .env قبل الإتاحة العامة
 # بناء وتشغيل الخادم والعامل على وحدة تخزين دائمة
 docker compose up --build -d
-docker compose exec web python -m wasla.cli bootstrap
+docker compose exec web python -m labbily.cli bootstrap
 ```
 
-المنفذ مكشوف على localhost فقط. ضع TLS reverse proxy أمامه، وحدد `WASLA_ENV=production` و`WASLA_ORIGIN=https://your-actual-domain` للاستخدام خارج الجهاز. عند النشر على Vercel استخدم PostgreSQL على Neon؛ ملفات SQLite المحلية لا تصلح على القرص المؤقت. تعليمات Docker خاصة بخادم ذي قرص دائم. راجع [دليل التشغيل](docs/OPERATIONS_AR.md).
+المنفذ مكشوف على localhost فقط. ضع TLS reverse proxy أمامه، وحدد `LABBILY_ENV=production` و`LABBILY_ORIGIN=https://your-actual-domain` للاستخدام خارج الجهاز. عند النشر على Vercel استخدم PostgreSQL على Neon؛ ملفات SQLite المحلية لا تصلح على القرص المؤقت. تعليمات Docker خاصة بخادم ذي قرص دائم. راجع [دليل التشغيل](docs/OPERATIONS_AR.md).
 
 ## الاختبارات
 
 ```bash
 python -m unittest discover -s tests -v
-python -m compileall -q wasla scripts
-node --check wasla/static/app.js
+python -m compileall -q labbily scripts
+node --check labbily/static/app.js
 ```
 
 كل اختبار يستخدم قاعدة مؤقتة مع بيانات اصطناعية. لا يرسل رسائل أو بريدًا ولا يتصل بمزود. [نتائج التحقق وحدودها](docs/VERIFICATION_AR.md).
@@ -80,7 +80,7 @@ node --check wasla/static/app.js
 - [الهوية البصرية القادمة](docs/BRANDING_AR.md)
 - [تحليل النتائج](docs/RESULTS_AR.md)
 
-لا يستخدم المشروع اسم المرجع أو شعاراته أو شهاداته أو إحصاءاته. تم تطبيق شعار Wasla المرفق والهوية البنفسجية والصفراء مع محرر مركزي محفوظ في قاعدة البيانات. لا تخزن أسرارًا أو بيانات حقيقية داخل Git.
+لا يستخدم المشروع اسم المرجع أو شعاراته أو شهاداته أو إحصاءاته. تم تطبيق شعار Labbily المرفق والهوية البنفسجية والصفراء مع محرر مركزي محفوظ في قاعدة البيانات. لا تخزن أسرارًا أو بيانات حقيقية داخل Git.
 
 ## الهوية الجديدة
 
@@ -91,10 +91,10 @@ node --check wasla/static/app.js
 ## Vercel + Neon deployment
 
 - Deployment entrypoint: index.py, Python 3.12, FastAPI.
-- Runtime DATABASE_URL is the **Neon pooled** connection; use DATABASE_URL_UNPOOLED only in an operator terminal for migrations (python -m wasla.cli init).
+- Runtime DATABASE_URL is the **Neon pooled** connection; use DATABASE_URL_UNPOOLED only in an operator terminal for migrations (python -m labbily.cli init).
 - Separate Neon production and preview branches; never share customer data with previews.
-- Set WASLA_ENV=production, WASLA_ORIGIN=https://your-domain and encrypted WASLA_WORKER_SECRET (at least 32 characters). Vercel uses the request host for same-origin checks on its own domains.
-- For the initial admin, execute python -m wasla.cli bootstrap from a trusted operator terminal with a direct database connection. The email and password are interactive, not API parameters. There are no default credentials or public setup endpoints.
+- Set LABBILY_ENV=production, LABBILY_ORIGIN=https://your-domain and encrypted LABBILY_WORKER_SECRET (at least 32 characters). Vercel uses the request host for same-origin checks on its own domains.
+- For the initial admin, execute python -m labbily.cli bootstrap from a trusted operator terminal with a direct database connection. The email and password are interactive, not API parameters. There are no default credentials or public setup endpoints.
 - WhatsApp events are persisted before acknowledgment. A Neon scheduled Function must invoke POST /api/internal/drain-webhooks with Authorization: Bearer <secret> every minute. Processing uses PostgreSQL row locks, retries with backoff, and a dead-letter status after five failures. Neither WhatsApp sending nor delivery verification is implemented in V1.
 - Verify SQLite and PostgreSQL CI acceptance, preview HTTP smoke tests and tenant-boundary checks before production promotion.
 - This repository contains no real SQLite database to migrate: the schema is migrated, not customer data. Importing customer data requires an authorized SQLite source backup and a separate controlled process.
@@ -102,7 +102,7 @@ node --check wasla/static/app.js
 
 ### Import authorized SQLite V1 data (optional)
 
-Prepare a **consistent offline SQLite backup**, not a live database file. Review source table counts first with python -m scripts.import_sqlite_to_postgres --source /path/to/backup.sqlite3. Set DATABASE_URL_UNPOOLED to the dedicated Neon PostgreSQL **direct** connection, run python -m wasla.cli init, then explicitly import with python -m scripts.import_sqlite_to_postgres --source /path/to/backup.sqlite3 --target-database wasla --apply. The target database must be empty. This is an atomic import with record-count verification and rollback on errors. Existing sessions and rate-limit counters are never copied; logins are required again.
+Prepare a **consistent offline SQLite backup**, not a live database file. Review source table counts first with python -m scripts.import_sqlite_to_postgres --source /path/to/backup.sqlite3. Set DATABASE_URL_UNPOOLED to the dedicated Neon PostgreSQL **direct** connection, run python -m labbily.cli init, then explicitly import with python -m scripts.import_sqlite_to_postgres --source /path/to/backup.sqlite3 --target-database labbily --apply. The target database must be empty. This is an atomic import with record-count verification and rollback on errors. Existing sessions and rate-limit counters are never copied; logins are required again.
 
 ## إغلاق V1
 

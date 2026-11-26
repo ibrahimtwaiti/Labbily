@@ -4,19 +4,19 @@ import tempfile
 import uvicorn
 from cryptography.fernet import Fernet
 os.environ.pop('DATABASE_URL',None)
-os.environ.pop('WASLA_DATABASE_URL',None)
-port=int(os.getenv('WASLA_BROWSER_PORT','8000'))
+os.environ.pop('LABBILY_DATABASE_URL',None)
+port=int(os.getenv('LABBILY_BROWSER_PORT','8000'))
 os.environ.pop('DATABASE_URL_UNPOOLED',None)
-with tempfile.TemporaryDirectory(prefix='wasla-browser-') as folder:
-    os.environ.update(WASLA_DB=folder+'/test.sqlite3',WASLA_ENV='development',WASLA_ORIGIN='http://127.0.0.1:'+str(port),WASLA_EMAIL_MODE='local',WASLA_SETUP_TOKEN='b'*48,WASLA_SETUP_EXPIRES='4102444800')
-    os.environ['WASLA_TOKEN_ENCRYPTION_KEY']=Fernet.generate_key().decode()
-    from wasla.db import initialize,transaction,now
-    from wasla.security import hash_password
+with tempfile.TemporaryDirectory(prefix='labbily-browser-') as folder:
+    os.environ.update(LABBILY_DB=folder+'/test.sqlite3',LABBILY_ENV='development',LABBILY_ORIGIN='http://127.0.0.1:'+str(port),LABBILY_EMAIL_MODE='local',LABBILY_SETUP_TOKEN='b'*48,LABBILY_SETUP_EXPIRES='4102444800')
+    os.environ['LABBILY_TOKEN_ENCRYPTION_KEY']=Fernet.generate_key().decode()
+    from labbily.db import initialize,transaction,now
+    from labbily.security import hash_password
     initialize()
     with transaction() as db:
         db.execute('INSERT INTO users VALUES(?,NULL,?,?,?,?,1,?)',('ui-provider','ui@example.test','UI Provider',hash_password('ui-only-long-password'),'provider',now()))
         db.execute('INSERT INTO users VALUES(?,NULL,?,?,?,?,1,?)',('ui-commerce','commerce@example.test','Commerce QA',hash_password('ui-only-long-password'),'provider',now()))
-    from wasla import service
+    from labbily import service
     import time
     with transaction() as db:
         db.execute('INSERT INTO tenants(id,name,status,created_at) VALUES(?,?,?,?)',('ui-service','Service QA','active',now()))
@@ -25,12 +25,12 @@ with tempfile.TemporaryDirectory(prefix='wasla-browser-') as folder:
         db.execute('INSERT INTO users VALUES(?,?,?,?,?,?,1,?)',('ui-meta','ui-service','meta@example.test','Meta QA',hash_password('service-test-password'),'admin',now()))
     service.persist_events('whatsapp',{'object':'whatsapp_business_account','entry':[{'changes':[{'value':{'metadata':{'phone_number_id':'123456'},'messages':[{'id':'qa-inbound','from':'966500000001','timestamp':str(int(time.time())),'type':'text','text':{'body':'Hello, I need an appointment'}}]}}]}]})
     service.process_event()
-    # These routes exist only in this disposable test process, never in wasla.main.
-    from wasla.main import app,user,provider
-    from wasla.db import one
+    # These routes exist only in this disposable test process, never in labbily.main.
+    from labbily.main import app,user,provider
+    from labbily.db import one
     from fastapi import Depends,HTTPException
-    from wasla import email_verification,privacy
-    from wasla.service_oauth import cipher
+    from labbily import email_verification,privacy
+    from labbily.service_oauth import cipher
     import json
     @app.post('/api/__test__/verification')
     def test_verification(data:dict,u=Depends(user)):

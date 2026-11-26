@@ -62,7 +62,7 @@ class OpsAlertTests(unittest.TestCase):
 
     def test_deduplicate_open_alert(self):
         alert = ("workflow-production-health", "Alert", "Content")
-        existing = {"body": "<!-- wasla-ops-alert:workflow-production-health -->"}
+        existing = {"body": "<!-- labbily-ops-alert:workflow-production-health -->"}
         with patch.object(ops_alert, "open_issues", return_value=[existing]), \
              patch.object(ops_alert, "api") as api:
             self.assertFalse(ops_alert.create_once(alert))
@@ -76,13 +76,13 @@ class OpsAlertTests(unittest.TestCase):
             method, path, payload = api.call_args.args
             self.assertEqual((method, path), ("POST", "issues"))
             self.assertEqual(payload["assignees"], ["ibrahimtwaiti"])
-            self.assertIn("<!-- wasla-ops-alert:backup-overdue -->", payload["body"])
+            self.assertIn("<!-- labbily-ops-alert:backup-overdue -->", payload["body"])
             self.assertNotIn("@gmail.com", payload["body"])
 
     def test_initial_deployment_push_creates_test_alert(self):
         alert = ops_alert.alert_from_event({}, "push")
         self.assertEqual(alert[0], "test")
-        self.assertIn("[Wasla TEST]", alert[1])
+        self.assertIn("[Labbily TEST]", alert[1])
 
 
     def test_safe_health_drill_marked_as_test_not_real_incident(self):
@@ -95,7 +95,7 @@ class OpsAlertTests(unittest.TestCase):
         }}
         alert = ops_alert.alert_from_event(event, 'workflow_run')
         self.assertEqual(alert[0], 'health-drill')
-        self.assertIn('[Wasla DRILL]', alert[1])
+        self.assertIn('[Labbily DRILL]', alert[1])
         self.assertIn('وليس عطلًا في الموقع', alert[2])
 
 if __name__ == "__main__":

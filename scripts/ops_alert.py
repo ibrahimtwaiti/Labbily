@@ -1,4 +1,4 @@
-"""Turn Wasla production monitor failures into actionable GitHub issues.
+"""Turn Labbily production monitor failures into actionable GitHub issues.
 
 This deliberately does not send emails directly. GitHub delivers notifications
 according to the repository owner's verified notification email preferences.
@@ -26,7 +26,7 @@ MAX_BACKUP_AGE_HOURS = 26
 def api(method, path, payload=None, *, token=None, repo=None):
     token = token or os.environ["GH_TOKEN"]
     repo = repo or os.environ["GITHUB_REPOSITORY"]
-    if repo != "ibrahimtwaiti/Wasla":
+    if repo != "ibrahimtwaiti/Labbily":
         raise ValueError("Unexpected repository; refusing to create alerts")
     url = "https://api.github.com/repos/" + repo + "/" + path.lstrip("/")
     data = json.dumps(payload).encode() if payload is not None else None
@@ -34,7 +34,7 @@ def api(method, path, payload=None, *, token=None, repo=None):
         "Accept": "application/vnd.github+json",
         "Authorization": "Bearer " + token,
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "wasla-operations-alert",
+        "User-Agent": "labbily-operations-alert",
         "Content-Type": "application/json",
     })
     with urlopen(req, timeout=20) as response:
@@ -45,7 +45,7 @@ def api(method, path, payload=None, *, token=None, repo=None):
 def alert_from_event(event, event_name):
     """Return (key, title, safe body) or None."""
     if event_name in {"workflow_dispatch", "push"}:
-        return ("test", "[Wasla TEST] تجربة إشعار التشغيل",
+        return ("test", "[Labbily TEST] تجربة إشعار التشغيل",
                 "هذا تنبيه اختبار اصطناعي، وليس عطلًا حقيقيًا. "
                 "يرجى التحقق من وصول إشعار GitHub إلى البريد المختار ثم إغلاق المسألة.")
     if event_name != "workflow_run":
@@ -59,9 +59,9 @@ def alert_from_event(event, event_name):
     if not isinstance(run_id, int) or run_id <= 0:
         return None
     # Construct the URL ourselves; do not trust arbitrary event URLs.
-    url = "https://github.com/ibrahimtwaiti/Wasla/actions/runs/" + str(run_id)
+    url = "https://github.com/ibrahimtwaiti/Labbily/actions/runs/" + str(run_id)
     drill = run.get("event") == "push" and name == "Production health"
-    intro = ("اختبار إخفاق متعمّد وآمن للتحقق من وصول تنبيهات Wasla، وليس عطلًا في الموقع."
+    intro = ("اختبار إخفاق متعمّد وآمن للتحقق من وصول تنبيهات Labbily، وليس عطلًا في الموقع."
              if drill else "فشل أو تعطل فحص تشغيلي في فرع main.")
     body = (intro + "\n\n"
             + f"**Workflow:** {name}\n**Result:** {conclusion}\n"
@@ -69,16 +69,16 @@ def alert_from_event(event, event_name):
             + "المسؤول الوحيد الحالي: @ibrahimtwaiti. "
             + "يرجى فحص السبب وتوثيق المعالجة. لا تضع أسرارًا أو بيانات عملاء في المسألة.")
     if drill:
-        return ("health-drill", "[Wasla DRILL] اختبار تنبيه فشل المراقبة", body)
+        return ("health-drill", "[Labbily DRILL] اختبار تنبيه فشل المراقبة", body)
     return ("workflow-" + name.lower().replace(" ", "-"),
-            "[Wasla ALERT] " + name, body)
+            "[Labbily ALERT] " + name, body)
 
 
 def backup_age_alert(latest_success, now=None):
     now = now or datetime.now(timezone.utc)
     if not latest_success:
         age_text = "لا يوجد تشغيل نسخ احتياطي ناجح مسجل على main."
-        link = "https://github.com/ibrahimtwaiti/Wasla/actions/workflows/backup.yml"
+        link = "https://github.com/ibrahimtwaiti/Labbily/actions/workflows/backup.yml"
     else:
         started = latest_success.get("created_at", "")
         time = datetime.fromisoformat(started.replace("Z", "+00:00"))
@@ -90,8 +90,8 @@ def backup_age_alert(latest_success, now=None):
         run_id = latest_success.get("id")
         if not isinstance(run_id, int):
             raise ValueError("Invalid run ID")
-        link = "https://github.com/ibrahimtwaiti/Wasla/actions/runs/" + str(run_id)
-    return ("backup-overdue", "[Wasla ALERT] لم تُثبت نسخة احتياطية حديثة",
+        link = "https://github.com/ibrahimtwaiti/Labbily/actions/runs/" + str(run_id)
+    return ("backup-overdue", "[Labbily ALERT] لم تُثبت نسخة احتياطية حديثة",
             age_text + "\n\n" + link +
             "\n\nالمسؤول: @ibrahimtwaiti. تحقق من R2 وسجل Actions، "
             "ولا تفترض نجاح الاستعادة لمجرد نجاح مهمة النسخ.")
@@ -112,7 +112,7 @@ def open_issues():
 
 def create_once(alert):
     key, title, body = alert
-    marker = "<!-- wasla-ops-alert:" + key + " -->"
+    marker = "<!-- labbily-ops-alert:" + key + " -->"
     if any(marker in (issue.get("body") or "") for issue in open_issues()):
         print("Alert already open:", key)
         return False

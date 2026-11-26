@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: wasla-production-backup
+  group: labbily-production-backup
   cancel-in-progress: false
 jobs:
   backup_and_restore:
@@ -23,13 +23,13 @@ jobs:
       restore-postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: wasla_restore
+          POSTGRES_USER: labbily_restore
           POSTGRES_PASSWORD: ci-restore-only
-          POSTGRES_DB: wasla_restore
+          POSTGRES_DB: labbily_restore
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U wasla_restore -d wasla_restore"
+          --health-cmd="pg_isready -U labbily_restore -d labbily_restore"
           --health-interval=5s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -80,9 +80,9 @@ jobs:
           check(['list-objects-v2', '--bucket', bucket,
                  '--prefix', prefix + '/', '--max-keys', '1', '--output', 'json'], 'LIST')
           print('R2_PREFLIGHT_LIST_OK', flush=True)
-          with tempfile.TemporaryDirectory(prefix='wasla-r2-test-') as folder:
+          with tempfile.TemporaryDirectory(prefix='labbily-r2-test-') as folder:
               file = Path(folder) / 'probe.txt'
-              file.write_bytes(b'wasla-r2-sigv4-preflight-v1\n')
+              file.write_bytes(b'labbily-r2-sigv4-preflight-v1\n')
               key = prefix + '/.diagnostics/r2-write-probe-' + uuid4().hex + '.txt'
               check(['put-object', '--bucket', bucket, '--key', key,
                      '--body', str(file), '--if-none-match', '*', '--output', 'json'], 'PUT')
@@ -114,7 +114,7 @@ jobs:
       - name: Dump production, upload and verify R2 metadata
         id: upload
         env:
-          WASLA_BACKUP_WRITE_OUTPUTS: '1'
+          LABBILY_BACKUP_WRITE_OUTPUTS: '1'
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
           R2_BUCKET: ${{ vars.R2_BUCKET }}
@@ -142,11 +142,11 @@ jobs:
           umask 077
           aws --endpoint-url "$R2_ENDPOINT_URL" --region auto s3api get-object \
             --bucket "$R2_BUCKET" --key "$RESTORE_OBJECT_KEY" \
-            "$RUNNER_TEMP/wasla-restore.dump" --output json >/dev/null
+            "$RUNNER_TEMP/labbily-restore.dump" --output json >/dev/null
           python - <<'PY'
           from pathlib import Path
           import hashlib, os
-          path = Path(os.environ['RUNNER_TEMP']) / 'wasla-restore.dump'
+          path = Path(os.environ['RUNNER_TEMP']) / 'labbily-restore.dump'
           with path.open('rb') as source:
               signature = source.read(5)
               source.seek(0)
@@ -155,14 +155,14 @@ jobs:
               raise SystemExit('R2 downloaded archive integrity verification failed')
           print('R2 object downloaded; bytes and SHA256 verified')
           PY
-          pg_restore --list "$RUNNER_TEMP/wasla-restore.dump" >/dev/null
-          python -m venv "$RUNNER_TEMP/wasla-restore-tools"
-          "$RUNNER_TEMP/wasla-restore-tools/bin/pip" install -r scripts/requirements-restore.txt
-          PGHOST=127.0.0.1 PGPORT=5432 PGUSER=wasla_restore PGDATABASE=wasla_restore \
-            "$RUNNER_TEMP/wasla-restore-tools/bin/python" -m scripts.restore_postgres "$RUNNER_TEMP/wasla-restore.dump"
+          pg_restore --list "$RUNNER_TEMP/labbily-restore.dump" >/dev/null
+          python -m venv "$RUNNER_TEMP/labbily-restore-tools"
+          "$RUNNER_TEMP/labbily-restore-tools/bin/pip" install -r scripts/requirements-restore.txt
+          PGHOST=127.0.0.1 PGPORT=5432 PGUSER=labbily_restore PGDATABASE=labbily_restore \
+            "$RUNNER_TEMP/labbily-restore-tools/bin/python" -m scripts.restore_postgres "$RUNNER_TEMP/labbily-restore.dump"
           restored_tables="$(psql --host 127.0.0.1 --port 5432 \
-            --username wasla_restore --dbname wasla_restore --tuples-only --no-align \
+            --username labbily_restore --dbname labbily_restore --tuples-only --no-align \
             --command="SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")"
           test "$restored_tables" -ge 19
           echo "Isolated PostgreSQL 17 restore passed; tables verified: $restored_tables"
-          rm -f "$RUNNER_TEMP/wasla-restore.dump"
+          rm -f "$RUNNER_TEMP/labbily-restore.dump"

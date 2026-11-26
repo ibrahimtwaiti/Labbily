@@ -63,7 +63,7 @@ def session(db,state,request,u,stage):
     from .saas import lock_tenant
     lock_tenant(db,u['tenant_id'])
     s=one(db,'SELECT * FROM meta_data_sessions WHERE state_hash=?'+(' FOR UPDATE' if postgres() else ''),(digest(state),))
-    if not s or s['tenant_id']!=u['tenant_id'] or s['user_id']!=u['id'] or s['session_hash']!=digest(request.cookies.get('wasla_session','')) or s['expires_at']<=int(time.time()) or s['stage']!=stage:raise HTTPException(403,'invalid_meta_data_state')
+    if not s or s['tenant_id']!=u['tenant_id'] or s['user_id']!=u['id'] or s['session_hash']!=digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))) or s['expires_at']<=int(time.time()) or s['stage']!=stage:raise HTTPException(403,'invalid_meta_data_state')
     c=config(s['kind'],u)
     if s['app_id']!=c['META_APP_ID'] or s['config_id']!=c['config_id'] or s['api_version']!=c['META_GRAPH_VERSION']:raise HTTPException(409,'meta_configuration_changed')
     return s,c
@@ -83,7 +83,7 @@ def start(kind:str,request:Request,u=Depends(user)):
     c=config(kind,u);throttle(u['tenant_id']);state=secrets.token_urlsafe(32)
     with transaction() as db:
         db.execute('DELETE FROM meta_data_sessions WHERE expires_at<?',(int(time.time()),))
-        db.execute('INSERT INTO meta_data_sessions(state_hash,tenant_id,user_id,session_hash,kind,app_id,config_id,api_version,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',(digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('wasla_session','')),kind,c['META_APP_ID'],c['config_id'],c['META_GRAPH_VERSION'],int(time.time())+600))
+        db.execute('INSERT INTO meta_data_sessions(state_hash,tenant_id,user_id,session_hash,kind,app_id,config_id,api_version,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',(digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))),kind,c['META_APP_ID'],c['config_id'],c['META_GRAPH_VERSION'],int(time.time())+600))
     return {'state':state,'app_id':c['META_APP_ID'],'config_id':c['config_id'],'api_version':c['META_GRAPH_VERSION']}
 
 @router.post('/api/v2/meta/data/exchange')

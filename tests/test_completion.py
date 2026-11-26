@@ -4,14 +4,14 @@ from cryptography.fernet import Fernet
 from fastapi import HTTPException
 import httpx
 import test_acceptance as base
-from wasla.db import transaction,one,rows,uid,now
-from wasla import email_verification as mail,privacy,entitlements,meta_data,service
-from wasla.service_oauth import cipher
+from labbily.db import transaction,one,rows,uid,now
+from labbily import email_verification as mail,privacy,entitlements,meta_data,service
+from labbily.service_oauth import cipher
 
 class Completion(unittest.TestCase):
     def setUp(self):
         base.Acceptance.setUp(self)
-        os.environ.update(WASLA_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),WASLA_EMAIL_MODE='local',WASLA_SELF_SIGNUP_MODE='test',META_APP_ID='123',META_GRAPH_VERSION='v26.0',META_SYSTEM_USER_TOKEN='inspector',META_SIGNUP_MODE='test',META_TEST_TENANTS='a,b',META_MARKETING_CONFIG_ID='456',META_CATALOG_CONFIG_ID='457',META_LEADS_CONFIG_ID='458')
+        os.environ.update(LABBILY_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),LABBILY_EMAIL_MODE='local',LABBILY_SELF_SIGNUP_MODE='test',META_APP_ID='123',META_GRAPH_VERSION='v26.0',META_SYSTEM_USER_TOKEN='inspector',META_SIGNUP_MODE='test',META_TEST_TENANTS='a,b',META_MARKETING_CONFIG_ID='456',META_CATALOG_CONFIG_ID='457',META_LEADS_CONFIG_ID='458')
     tearDown=base.Acceptance.tearDown
     login=base.Acceptance.login
     def plan(self,**limits):
@@ -41,23 +41,23 @@ class Completion(unittest.TestCase):
         self.assertEqual(self.client.post('/api/auth/login',json={'email':account['email'],'password':'long-new-password-123'}).status_code,200)
         with transaction() as db:self.assertEqual(db.execute("SELECT count(*) FROM email_jobs WHERE ciphertext<>''").fetchone()[0],0)
     def test_email_failed_delivery_retry_and_expiration(self):
-        account,token=self.register();os.environ.update(WASLA_EMAIL_MODE='smtp',WASLA_EMAIL_ORIGIN='https://preview.example.test',WASLA_SMTP_HOST='smtp.example.test',WASLA_SMTP_USER='test',WASLA_SMTP_PASSWORD='test-secret',WASLA_SMTP_FROM='noreply@example.test')
-        with patch('wasla.email_verification.smtplib.SMTP',side_effect=OSError('private-details')):mail.process_email()
+        account,token=self.register();os.environ.update(LABBILY_EMAIL_MODE='smtp',LABBILY_EMAIL_ORIGIN='https://preview.example.test',LABBILY_SMTP_HOST='smtp.example.test',LABBILY_SMTP_USER='test',LABBILY_SMTP_PASSWORD='test-secret',LABBILY_SMTP_FROM='noreply@example.test')
+        with patch('labbily.email_verification.smtplib.SMTP',side_effect=OSError('private-details')):mail.process_email()
         with transaction() as db:
             job=one(db,'SELECT * FROM email_jobs');self.assertEqual(job['state'],'retry');self.assertNotIn('private-details',job['error'])
             db.execute('UPDATE email_jobs SET next_attempt=0');db.execute('UPDATE email_verifications SET expires_at=0')
         mail.process_email();self.assertEqual(self.client.post('/api/auth/verification/complete',json={'token':token}).status_code,409)
-        os.environ['WASLA_ENV']='production';os.environ['WASLA_EMAIL_MODE']='local'
+        os.environ['LABBILY_ENV']='production';os.environ['LABBILY_EMAIL_MODE']='local'
         with self.assertRaises(HTTPException):mail.configuration()
     def test_smtp_provider_uses_tls_and_does_not_retain_sent_token(self):
-        self.register();os.environ.update(WASLA_EMAIL_MODE='smtp',WASLA_EMAIL_ORIGIN='https://preview.example.test',WASLA_SMTP_HOST='smtp.example.test',WASLA_SMTP_USER='test',WASLA_SMTP_PASSWORD='test-secret',WASLA_SMTP_FROM='noreply@example.test')
+        self.register();os.environ.update(LABBILY_EMAIL_MODE='smtp',LABBILY_EMAIL_ORIGIN='https://preview.example.test',LABBILY_SMTP_HOST='smtp.example.test',LABBILY_SMTP_USER='test',LABBILY_SMTP_PASSWORD='test-secret',LABBILY_SMTP_FROM='noreply@example.test')
         smtp=MagicMock()
-        with patch('wasla.email_verification.smtplib.SMTP',return_value=smtp):mail.process_email()
+        with patch('labbily.email_verification.smtplib.SMTP',return_value=smtp):mail.process_email()
         smtp.__enter__.return_value.starttls.assert_called_once();smtp.__enter__.return_value.send_message.assert_called_once()
         with transaction() as db:self.assertEqual(one(db,'SELECT ciphertext FROM email_jobs')['ciphertext'],'')
-        os.environ['WASLA_EMAIL_MODE']='local'
+        os.environ['LABBILY_EMAIL_MODE']='local'
         for origin in ['ftp://localhost','http://localhost/path','http://user@localhost','http://localhost/#fragment']:
-            os.environ['WASLA_EMAIL_ORIGIN']=origin
+            os.environ['LABBILY_EMAIL_ORIGIN']=origin
             with self.assertRaises(HTTPException):mail.configuration()
     def test_limits_block_direct_api_reactivation_and_meta_requests(self):
         plan=self.plan(seats=4,channels=0,meta_accounts=0,api_requests=1)
@@ -83,11 +83,11 @@ class Completion(unittest.TestCase):
         self.assertEqual(self.client.get('/api/me').status_code,401)
         privacy.process_deletion();self.assertEqual(self.client.get('/api/privacy/deletions/'+ident).json()['state'],'blocked_hold')
         with transaction() as db:db.execute("DELETE FROM retention_holds WHERE entity_id='a'");db.execute('UPDATE deletion_jobs SET next_attempt=0')
-        with patch('wasla.service_media.client',side_effect=RuntimeError('storage down')):privacy.process_deletion()
+        with patch('labbily.service_media.client',side_effect=RuntimeError('storage down')):privacy.process_deletion()
         with transaction() as db:
             self.assertIsNotNone(one(db,"SELECT id FROM tenants WHERE id='a'"));db.execute('UPDATE deletion_jobs SET next_attempt=0')
         storage=MagicMock()
-        with patch('wasla.service_media.client',return_value=storage):
+        with patch('labbily.service_media.client',return_value=storage):
             for _ in range(4):privacy.process_deletion()
         storage.delete_object.assert_called_once()
         self.assertEqual(self.client.get('/api/privacy/deletions/'+ident).json()['state'],'completed')
@@ -121,14 +121,14 @@ class Completion(unittest.TestCase):
         if kind=='catalogs':responses += [{'data':[{'id':'10','name':'Business'}]},{'data':[{'id':'20','name':'Catalog'}]},{'data':[]}];asset='20'
         elif kind=='leads':responses += [{'data':[{'id':'30','name':'Page','tasks':['ADVERTISE'],'access_token':'page-secret'}]}];asset='30'
         else:responses += [{'data':[{'id':'act_40','name':'Ads'}]}];asset='act_40'
-        with patch('wasla.meta_onboarding.httpx.request',side_effect=[httpx.Response(200,json=x) for x in responses]):
+        with patch('labbily.meta_onboarding.httpx.request',side_effect=[httpx.Response(200,json=x) for x in responses]):
             r=self.client.post('/api/v2/meta/data/exchange',json={'state':state,'code':'secret-code'})
         self.assertEqual(r.status_code,200,r.text);self.assertNotIn('secret',r.text)
         r=self.client.post('/api/v2/meta/data/connect',json={'state':state,'asset_id':asset});self.assertEqual(r.status_code,200,r.text);return r.json()['id']
     def test_catalog_and_marketing_sync_real_adapter_mock_transport(self):
         for kind,record in [('catalogs',{'id':'p1','name':'Product','price':'100','currency':'SAR'}),('marketing',{'account_id':'40','impressions':'100','date_start':'2026-11-01','date_stop':'2026-11-18'})]:
             aid=self.data_connect(kind)
-            with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[record]})) as call:
+            with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[record]})) as call:
                 r=self.client.post('/api/v2/meta/data/'+aid+'/sync',json={});self.assertEqual(r.status_code,200,r.text)
                 self.assertEqual(call.call_args.args[0],'GET')
             data=self.client.get('/api/v2/meta/data/'+aid+'/records').json()['data'];self.assertEqual(data[0]['value'],record)
@@ -141,31 +141,31 @@ class Completion(unittest.TestCase):
         raw=json.dumps(payload).encode();signature='sha256='+hmac.new(os.environ['META_APP_SECRET'].encode(),raw,hashlib.sha256).hexdigest()
         self.assertEqual(self.client.post('/api/webhooks/meta/leads',content=raw,headers={'X-Hub-Signature-256':'bad'}).status_code,401)
         for _ in range(2):self.assertEqual(self.client.post('/api/webhooks/meta/leads',content=raw,headers={'X-Hub-Signature-256':signature}).status_code,200)
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(429,json={'error':{'code':4}})):meta_data.process_lead()
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(429,json={'error':{'code':4}})):meta_data.process_lead()
         with transaction() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM meta_lead_events').fetchone()[0],1);db.execute('UPDATE meta_lead_events SET next_attempt=0')
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'id':'31','field_data':[{'name':'email','values':['lead@example.test']}]})):meta_data.process_lead()
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'id':'31','field_data':[{'name':'email','values':['lead@example.test']}]})):meta_data.process_lead()
         data=self.client.get('/api/v2/meta/data/'+aid+'/records').json()['data'];self.assertEqual(len(data),1);self.assertEqual(data[0]['value']['id'],'31')
     def test_lead_disconnect_and_erasure_preserve_other_page_subscriptions(self):
         aid=self.data_connect('leads');path='/api/v2/meta/data/'+aid
         def responses():
             request=httpx.Request('GET','https://graph.facebook.com/v26.0/30/subscribed_apps')
             return [httpx.Response(200,json={'data':[{'id':'123','subscribed_fields':['messages','message_reads','leadgen']}]},request=request),httpx.Response(200,json={'success':True},request=request)]
-        with patch('wasla.meta_onboarding.httpx.request',side_effect=responses()) as request:
+        with patch('labbily.meta_onboarding.httpx.request',side_effect=responses()) as request:
             r=self.client.post(path+'/disconnect',json={});self.assertEqual(r.json()['remote_unsubscribe'],'confirmed',r.text)
             self.assertEqual(request.call_args.kwargs['json'],{'subscribed_fields':['message_reads','messages']})
         aid=self.data_connect('leads')
         r=self.client.post('/api/v2/privacy/deletions',json={'scope':'account','account_id':aid,'password':base.PASSWORD,'confirm':'DELETE'});self.assertEqual(r.status_code,202,r.text)
-        with patch('wasla.privacy.httpx.request',side_effect=responses()) as request:
+        with patch('labbily.privacy.httpx.request',side_effect=responses()) as request:
             privacy.process_deletion();self.assertEqual(request.call_args.kwargs['json'],{'subscribed_fields':['message_reads','messages']})
         privacy.process_deletion();self.assertEqual(self.client.get('/api/privacy/deletions/'+r.json()['id']).json()['state'],'completed')
     def test_lead_disconnect_erases_token_on_provider_failure(self):
         aid=self.data_connect('leads')
-        with patch('wasla.meta_onboarding.httpx.request',side_effect=httpx.ConnectError('private provider failure')):
+        with patch('labbily.meta_onboarding.httpx.request',side_effect=httpx.ConnectError('private provider failure')):
             r=self.client.post('/api/v2/meta/data/'+aid+'/disconnect',json={});self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['remote_unsubscribe'],'not_confirmed')
         with transaction() as db:self.assertEqual(one(db,'SELECT ciphertext FROM meta_data_connections WHERE id=?',(aid,))['ciphertext'],'')
     def test_messenger_read_watermarks_are_monotonic_and_tenant_scoped(self):
-        from wasla.messenger_metrics import apply_watermark
+        from labbily.messenger_metrics import apply_watermark
         aid=self.account();clock=int(time.time())
         payload={'object':'page','entry':[{'id':'900','messaging':[{'sender':{'id':'800'},'recipient':{'id':'900'},'timestamp':clock*1000,'message':{'mid':'customer','text':'hello'}}]}]}
         service.persist_events('messenger',payload);service.process_event()
@@ -185,19 +185,19 @@ class Completion(unittest.TestCase):
         self.login('admin-b');self.assertEqual(self.client.get('/api/v2/meta/messenger/metrics').json()['accounts'],[])
     def test_data_expiry_health_revocation_and_pagination(self):
         aid=self.data_connect('catalogs');path='/api/v2/meta/data/'+aid
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[{'id':'1'}],'paging':{'next':'https://evil.example/steal','cursors':{'after':'abc'}}})):
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[{'id':'1'}],'paging':{'next':'https://evil.example/steal','cursors':{'after':'abc'}}})):
             self.assertEqual(self.client.post(path+'/sync',json={}).json()['next_cursor'],'abc')
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[]})) as request:
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[]})) as request:
             self.assertEqual(self.client.post(path+'/sync',json={'cursor':'abc'}).status_code,200)
             self.assertIn('graph.facebook.com',request.call_args.args[1]);self.assertEqual(request.call_args.kwargs['params']['after'],'abc')
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':{'is_valid':False}})):
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':{'is_valid':False}})):
             self.assertEqual(self.client.post(path+'/token-health',json={}).json()['health'],'reauthorize')
         with transaction() as db:self.assertEqual(one(db,'SELECT ciphertext FROM meta_data_connections WHERE id=?',(aid,))['ciphertext'],'')
         self.assertEqual(self.client.post(path+'/sync',json={}).status_code,409)
     def test_meta_signed_deletion_callback_replay_and_full_cleanup(self):
         import hashlib,hmac,base64
-        from wasla.security import digest
-        aid=self.account();os.environ['WASLA_OAUTH_ORIGIN']='https://wasla.example.test'
+        from labbily.security import digest
+        aid=self.account();os.environ['LABBILY_OAUTH_ORIGIN']='https://labbily.example.test'
         with transaction() as db:db.execute('INSERT INTO meta_grants VALUES(?,?,?,?,NULL,?)',(aid,'a','123',digest('777'),'valid'))
         encoded=base64.urlsafe_b64encode(json.dumps({'algorithm':'HMAC-SHA256','user_id':'777','issued_at':int(time.time())}).encode()).decode().rstrip('=')
         signature=base64.urlsafe_b64encode(hmac.new(os.environ['META_APP_SECRET'].encode(),encoded.encode(),hashlib.sha256).digest()).decode().rstrip('=')
@@ -209,30 +209,30 @@ class Completion(unittest.TestCase):
         with transaction() as db:self.assertIsNone(one(db,'SELECT id FROM service_accounts WHERE id=?',(aid,)));self.assertIsNotNone(one(db,"SELECT id FROM tenants WHERE id='a'"))
         self.assertEqual(self.client.post('/api/webhooks/meta/data-deletion',content='signed_request=bad.'+encoded,headers=headers).status_code,403)
     def test_page_publishing_permission_idempotency_and_unknown_dispatch(self):
-        from wasla.page_posts import process_post
+        from labbily.page_posts import process_post
         os.environ['META_FACEBOOK_CONFIG_ID']='456';aid=self.account();self.login();url='/api/v2/meta/pages/'+aid+'/posts';body={'body':'A page update','confirmation':'PUBLISH'};headers={'Idempotency-Key':'post-operation-001'}
         self.assertEqual(self.client.post(url,json=body,headers=headers).status_code,409)
         with transaction() as db:
             db.execute('UPDATE service_accounts SET scopes=?,token_ref=? WHERE id=?',(json.dumps(['pages_manage_posts','pages_read_engagement','pages_show_list']),'vault:'+aid,aid));db.execute('INSERT INTO service_secrets VALUES(?,?,?)',(aid,cipher().encrypt(b'page-secret').decode(),int(time.time())))
         r=self.client.post(url,json=body,headers=headers);self.assertEqual(r.status_code,202,r.text);self.assertEqual(self.client.post(url,json=body,headers=headers).json(),r.json())
         self.assertEqual(self.client.post(url,json={**body,'body':'Changed'},headers=headers).status_code,409)
-        with patch('wasla.meta_onboarding.httpx.request',side_effect=httpx.ReadTimeout('timeout secret')) as call:process_post();self.assertFalse(process_post());call.assert_called_once()
+        with patch('labbily.meta_onboarding.httpx.request',side_effect=httpx.ReadTimeout('timeout secret')) as call:process_post();self.assertFalse(process_post());call.assert_called_once()
         self.assertEqual(self.client.get(url).json()['posts'][0]['state'],'unknown')
         self.assertEqual(self.client.post(url,json=body,headers={'Idempotency-Key':'post-operation-002'}).status_code,202)
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'id':'900_111'})):process_post()
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'id':'900_111'})):process_post()
         self.assertIn('published',[p['state'] for p in self.client.get(url).json()['posts']])
         self.login('admin-b');self.assertEqual(self.client.get(url).status_code,404)
     def test_instagram_discovers_identity_without_manual_account_and_blocks_takeover(self):
         from urllib.parse import parse_qs,urlparse
-        from wasla.service_oauth import SCOPES
-        os.environ.update(INSTAGRAM_APP_ID='789',INSTAGRAM_APP_SECRET='test-instagram-secret',WASLA_OAUTH_ORIGIN='https://preview.example.test')
+        from labbily.service_oauth import SCOPES
+        os.environ.update(INSTAGRAM_APP_ID='789',INSTAGRAM_APP_SECRET='test-instagram-secret',LABBILY_OAUTH_ORIGIN='https://preview.example.test')
         def connect(identity):
             started=self.client.post('/api/v2/meta/instagram/start',json={});self.assertEqual(started.status_code,200,started.text)
             state=parse_qs(urlparse(started.json()['authorization_url']).query)['state'][0]
             request=httpx.Request('GET','https://graph.instagram.com/access_token')
             short=httpx.Response(200,json={'data':[{'user_id':identity,'permissions':','.join(SCOPES),'access_token':'short-only'}]},request=request)
             long=httpx.Response(200,json={'access_token':'long-instagram-secret','expires_in':5184000},request=request)
-            with patch('wasla.service_oauth.httpx.post',return_value=short),patch('wasla.service_oauth.httpx.get',return_value=long):result=self.client.post('/api/v2/oauth/instagram/complete',json={'state':state,'code':'one-use-code'})
+            with patch('labbily.service_oauth.httpx.post',return_value=short),patch('labbily.service_oauth.httpx.get',return_value=long):result=self.client.post('/api/v2/oauth/instagram/complete',json={'state':state,'code':'one-use-code'})
             self.assertEqual(self.client.post('/api/v2/oauth/instagram/complete',json={'state':state,'code':'one-use-code'}).status_code,403)
             return result
         self.login();r=connect('700');self.assertEqual(r.status_code,200,r.text);self.assertNotIn('secret',r.text)
@@ -240,10 +240,10 @@ class Completion(unittest.TestCase):
             a=one(db,"SELECT * FROM service_accounts WHERE channel='instagram'");self.assertEqual(a['provider_id'],'700');self.assertEqual(a['tenant_id'],'a');self.assertNotIn('long-instagram-secret',one(db,'SELECT ciphertext FROM service_secrets')['ciphertext'])
         self.login('admin-b');self.assertEqual(connect('700').status_code,409)
     def test_worker_is_fair_and_authenticated(self):
-        from wasla.jobs import tick
-        os.environ['WASLA_WORKER_SECRET']='w'*40
+        from labbily.jobs import tick
+        os.environ['LABBILY_WORKER_SECRET']='w'*40
         self.assertEqual(self.client.post('/api/internal/drain-webhooks',json={}).status_code,401)
-        with patch('wasla.page_posts.process_post',return_value=True) as page,patch('wasla.service.process_event',return_value=True) as inbox:
+        with patch('labbily.page_posts.process_post',return_value=True) as page,patch('labbily.service.process_event',return_value=True) as inbox:
             outcomes=[tick(max_jobs=1)['queues'] for _ in range(4)]
             self.assertTrue(any(r['inbound'] for r in outcomes));self.assertTrue(any(r['page_posts'] for r in outcomes))
         r=self.client.post('/api/internal/drain-webhooks',json={},headers={'Authorization':'Bearer '+'w'*40});self.assertEqual(r.status_code,200,r.text)
@@ -261,7 +261,7 @@ class Completion(unittest.TestCase):
         self.assertEqual(self.client.get('/api/v2/billing').json()['limits']['seats'],5)
     def test_data_connection_erasure_covers_records_and_jobs(self):
         aid=self.data_connect('catalogs')
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[{'id':'1','name':'private product'}]})):self.client.post('/api/v2/meta/data/'+aid+'/sync',json={})
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':[{'id':'1','name':'private product'}]})):self.client.post('/api/v2/meta/data/'+aid+'/sync',json={})
         r=self.client.post('/api/v2/privacy/deletions',json={'scope':'account','account_id':aid,'password':base.PASSWORD,'confirm':'DELETE'});self.assertEqual(r.status_code,202,r.text)
         privacy.process_deletion()
         self.assertEqual(self.client.get('/api/privacy/deletions/'+r.json()['id']).json()['state'],'completed')
@@ -274,7 +274,7 @@ class Completion(unittest.TestCase):
         with transaction() as db:db.execute("INSERT INTO tenants(id,name,created_at) VALUES('a','restored',?)",(now(),))
         dry=replay_ledger(ledger);self.assertEqual(len(dry['jobs']),1)
         with transaction() as db:self.assertNotEqual(one(db,"SELECT status FROM tenants WHERE id='a'")['status'],'suspended')
-        with patch.dict(os.environ,{'WASLA_ENV':'restore'}):
+        with patch.dict(os.environ,{'LABBILY_ENV':'restore'}):
             first=replay_ledger(ledger,True);self.assertEqual(first,replay_ledger(ledger,True))
             from scripts.deletion_ledger import drain_replay
             self.assertEqual(drain_replay(first['jobs']),0)
@@ -288,7 +288,7 @@ class Completion(unittest.TestCase):
         r=self.client.post(path+'/exchange',json={'state':'x','code':'must-not-leak'});self.assertEqual(r.status_code,422);self.assertNotIn('must-not-leak',r.text)
         self.assertEqual(self.client.post(path+'/'+aid+'/disconnect',json={}).status_code,200)
     def test_openapi_auth_boundaries_and_expired_staging_cleanup(self):
-        from wasla.jobs import cleanup_expired_security_metadata
+        from labbily.jobs import cleanup_expired_security_metadata
         self.assertEqual(self.client.get('/api/v2/openapi.json').status_code,401)
         self.login();r=self.client.get('/api/v2/openapi.json');self.assertEqual(r.status_code,200,r.text[:100]);schema=r.json()
         self.assertEqual(schema['paths']['/api/auth/verification/complete']['post']['security'],[])
@@ -300,11 +300,11 @@ class Completion(unittest.TestCase):
     def test_launch_configuration_requires_evidence_per_service_and_current_terms(self):
         plan=self.plan(seats=2)
         path='/api/admin/integrations/configuration'
-        self.assertEqual(self.client.put(path,json={'values':{'META_SIGNUP_MODE':'enabled','WASLA_SELF_SIGNUP_MODE':'enabled'}}).status_code,200)
+        self.assertEqual(self.client.put(path,json={'values':{'META_SIGNUP_MODE':'enabled','LABBILY_SELF_SIGNUP_MODE':'enabled'}}).status_code,200)
         self.assertFalse(self.client.get('/api/public/plans').json()['signup_enabled'])
         self.login();self.assertFalse(any(s['available'] for s in self.client.get('/api/v2/meta/data').json()['services']))
         self.login('provider')
-        values={'META_APPROVAL_REFERENCE':'synthetic review reference - test only','META_APPROVED_SERVICES':'catalogs','WASLA_SIGNUP_APPROVAL_REFERENCE':'synthetic owner review - test only','WASLA_SIGNUP_TERMS_VERSION':'terms-2026-11'}
+        values={'META_APPROVAL_REFERENCE':'synthetic review reference - test only','META_APPROVED_SERVICES':'catalogs','LABBILY_SIGNUP_APPROVAL_REFERENCE':'synthetic owner review - test only','LABBILY_SIGNUP_TERMS_VERSION':'terms-2026-11'}
         self.assertEqual(self.client.put(path,json={'values':values}).status_code,200)
         self.login();services={s['kind']:s['available'] for s in self.client.get('/api/v2/meta/data').json()['services']};self.assertTrue(services['catalogs']);self.assertFalse(services['marketing']);self.assertFalse(services['leads'])
         policy=self.client.get('/api/public/plans').json();self.assertTrue(policy['signup_enabled']);self.assertFalse(policy['payment_collection_enabled'])
@@ -314,8 +314,8 @@ class Completion(unittest.TestCase):
         with transaction() as db:self.assertEqual(one(db,"SELECT terms_version FROM service_registrations r JOIN users u ON u.id=r.user_id WHERE u.email='reviewed@example.test'")['terms_version'],'terms-2026-11')
 
     def test_hosted_sessions_and_health_identify_running_release(self):
-        from wasla.main import app
-        for env in ({'WASLA_ENV':'staging'}, {'VERCEL_ENV':'preview'}):
+        from labbily.main import app
+        for env in ({'LABBILY_ENV':'staging'}, {'VERCEL_ENV':'preview'}):
             with self.subTest(env=env),patch.dict(os.environ,env):
                 self.client.headers['Origin']='https://testserver' if 'VERCEL_ENV' in env else 'http://localhost:8000'
                 r=self.client.post('/api/auth/login',json={'email':'admin-a@example.test','password':base.PASSWORD})
@@ -329,9 +329,9 @@ class Completion(unittest.TestCase):
         path='/api/public/plans'
         self.assertFalse(self.client.get(path).json()['signup_enabled'])
         plan=self.plan()
-        with patch.dict(os.environ,{'WASLA_EMAIL_MODE':'disabled'}):
+        with patch.dict(os.environ,{'LABBILY_EMAIL_MODE':'disabled'}):
             self.assertFalse(self.client.get(path).json()['signup_enabled'])
-        with patch.dict(os.environ,{'WASLA_SELF_SIGNUP_MODE':'enabled','WASLA_SIGNUP_APPROVAL_REFERENCE':'reviewed test trial','WASLA_SIGNUP_TERMS_VERSION':'trial-v2'}):
+        with patch.dict(os.environ,{'LABBILY_SELF_SIGNUP_MODE':'enabled','LABBILY_SIGNUP_APPROVAL_REFERENCE':'reviewed test trial','LABBILY_SIGNUP_TERMS_VERSION':'trial-v2'}):
             data={'company':'Trial workspace','name':'Owner','email':'trial-owner@example.test','password':'trial-password-long-123','terms_version':'trial-v2','plan_id':plan}
             self.assertEqual(self.client.post('/api/auth/register',json=data).status_code,202)
             with transaction() as db:
@@ -343,18 +343,18 @@ class Completion(unittest.TestCase):
     def test_restore_replay_with_stale_credentials_files_and_unrelated_pending_job(self):
         from scripts.deletion_ledger import replay_ledger,drain_replay
         aid=self.account()
-        ledger={'format':'wasla-erasure-ledger-v1','deletions':[{'id':'archive-job','tenant_id':'a','requester_id':'admin-a','scope':'tenant','targets':json.dumps({'accounts':[aid],'data_accounts':[]})}]}
+        ledger={'format':'labbily-erasure-ledger-v1','deletions':[{'id':'archive-job','tenant_id':'a','requester_id':'admin-a','scope':'tenant','targets':json.dumps({'accounts':[aid],'data_accounts':[]})}]}
         with transaction() as db:
             db.execute('INSERT INTO service_secrets VALUES(?,?,?)',(aid,'retired-encryption-key',1))
             other=privacy.queue(db,'b','admin-b','tenant')
         with self.assertRaisesRegex(ValueError,'isolated_restore'):
             replay_ledger(ledger,True)
-        with patch.dict(os.environ,{'WASLA_ENV':'restore'}):
+        with patch.dict(os.environ,{'LABBILY_ENV':'restore'}):
             jobs=replay_ledger(ledger,True)['jobs']
             with transaction() as db:
                 db.execute('UPDATE deletion_jobs SET remote_ciphertext=? WHERE id=?',('old-ciphertext',jobs[0]))
                 db.execute('INSERT INTO deletion_objects VALUES(?,?)',(jobs[0],'source/object'))
-            with patch('wasla.service_media.client') as storage,patch('wasla.privacy.httpx.request') as meta:
+            with patch('labbily.service_media.client') as storage,patch('labbily.privacy.httpx.request') as meta:
                 self.assertEqual(drain_replay(jobs),0);storage.assert_not_called();meta.assert_not_called()
             with transaction() as db:
                 self.assertIsNone(one(db,"SELECT id FROM tenants WHERE id='a'"))
@@ -367,8 +367,8 @@ class Completion(unittest.TestCase):
             db.execute('INSERT INTO deletion_objects VALUES(?,?)',(ident,'source/file'))
             db.execute("INSERT INTO retention_holds VALUES('tenant','a','documented case',NULL,?)",(now(),))
         row={'id':ident,'tenant_id':'a','requester_id':'admin-a','scope':'tenant','targets':'{"accounts":[],"data_accounts":[]}'}
-        with patch.dict(os.environ,{'WASLA_ENV':'restore'}):
-            ledger={'format':'wasla-erasure-ledger-v1','deletions':[row]}
+        with patch.dict(os.environ,{'LABBILY_ENV':'restore'}):
+            ledger={'format':'labbily-erasure-ledger-v1','deletions':[row]}
             self.assertEqual(replay_ledger(ledger,True)['jobs'],[ident])
             self.assertEqual(drain_replay([ident]),1)
             with transaction() as db:

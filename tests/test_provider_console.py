@@ -5,9 +5,9 @@ from urllib.parse import urlparse,parse_qs
 import httpx
 from cryptography.fernet import Fernet
 import test_acceptance as base
-from wasla.db import transaction,one
-from wasla import service
-from wasla.runtime_configuration import value
+from labbily.db import transaction,one
+from labbily import service
+from labbily.runtime_configuration import value
 
 class ProviderConsole(unittest.TestCase):
     setUp=base.Acceptance.setUp
@@ -15,7 +15,7 @@ class ProviderConsole(unittest.TestCase):
     login=base.Acceptance.login
 
     def setup_console(self):
-        os.environ['WASLA_TOKEN_ENCRYPTION_KEY']=Fernet.generate_key().decode();self.login('provider')
+        os.environ['LABBILY_TOKEN_ENCRYPTION_KEY']=Fernet.generate_key().decode();self.login('provider')
         r=self.client.post('/api/admin/workspaces/a/integrations',json={'channel':'whatsapp','provider_id':'12345','api_version':'v27.0','label':'Test connection'})
         self.assertEqual(r.status_code,201,r.text);return r.json()['id']
 
@@ -33,7 +33,7 @@ class ProviderConsole(unittest.TestCase):
             account=one(db,'SELECT * FROM service_accounts WHERE id=?',(aid,));secret=one(db,'SELECT ciphertext FROM service_secrets WHERE account_id=?',(aid,));self.assertNotIn('secret-account-token',secret['ciphertext'])
             self.assertEqual(service.token(account),'secret-account-token')
         view=self.client.get('/api/admin/integrations');self.assertEqual(view.status_code,200,view.text);self.assertNotIn('secret-account-token',view.text)
-        with patch('wasla.service.provider_request',return_value=httpx.Response(200,json={'id':'12345'})):
+        with patch('labbily.service.provider_request',return_value=httpx.Response(200,json={'id':'12345'})):
             self.assertEqual(self.client.post(path+'/check',json={}).status_code,200)
         self.client.patch(path,json={'label':'Same secret','api_version':'v27.0','access_token':''})
         with transaction() as db:self.assertEqual(one(db,'SELECT state FROM service_accounts WHERE id=?',(aid,))['state'],'verified')
@@ -50,11 +50,11 @@ class ProviderConsole(unittest.TestCase):
         self.assertEqual(self.client.get('/api/webhooks/v2/whatsapp?hub.mode=subscribe&hub.verify_token=new-verify&hub.challenge=123').text,'123')
         self.client.put('/api/admin/integrations/configuration',json={'values':{'META_APP_SECRET':''}});self.assertEqual(value('META_APP_SECRET'),'new-app-secret')
         self.assertEqual(self.client.put('/api/admin/integrations/configuration',json={'values':{'DATABASE_URL':'no'}}).status_code,422)
-        self.assertEqual(self.client.put('/api/admin/integrations/configuration',json={'values':{'WASLA_OAUTH_ORIGIN':'http://unsafe.test'}}).status_code,422)
+        self.assertEqual(self.client.put('/api/admin/integrations/configuration',json={'values':{'LABBILY_OAUTH_ORIGIN':'http://unsafe.test'}}).status_code,422)
 
     def test_provider_oauth_state_works_without_tenant_impersonation(self):
         self.setup_console()
-        self.client.put('/api/admin/integrations/configuration',json={'values':{'INSTAGRAM_APP_ID':'123','INSTAGRAM_APP_SECRET':'test-secret','WASLA_OAUTH_ORIGIN':'https://app.example.test'}})
+        self.client.put('/api/admin/integrations/configuration',json={'values':{'INSTAGRAM_APP_ID':'123','INSTAGRAM_APP_SECRET':'test-secret','LABBILY_OAUTH_ORIGIN':'https://app.example.test'}})
         r=self.client.post('/api/admin/workspaces/a/integrations',json={'channel':'instagram','provider_id':'54321','api_version':'v27.0','label':'IG test'});aid=r.json()['id']
         r=self.client.post('/api/admin/workspaces/a/integrations/'+aid+'/authorize',json={});self.assertEqual(r.status_code,200,r.text)
         state=parse_qs(urlparse(r.json()['authorization_url']).query)['state'][0]
@@ -62,7 +62,7 @@ class ProviderConsole(unittest.TestCase):
         self.assertEqual(self.client.post('/api/v2/oauth/instagram/complete',json={'state':state,'error':'access_denied'}).status_code,403)
 
     def test_configuration_requires_root_key_and_csrf(self):
-        self.login('provider');os.environ.pop('WASLA_TOKEN_ENCRYPTION_KEY',None)
+        self.login('provider');os.environ.pop('LABBILY_TOKEN_ENCRYPTION_KEY',None)
         self.assertEqual(self.client.put('/api/admin/integrations/configuration',json={'values':{'META_APP_SECRET':'test'}}).status_code,503)
         self.client.headers.pop('X-CSRF-Token');self.assertEqual(self.client.put('/api/admin/integrations/configuration',json={'values':{'META_APP_SECRET':'test'}}).status_code,403)
 

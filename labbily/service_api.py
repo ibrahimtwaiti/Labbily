@@ -39,7 +39,7 @@ def accounts(u=Depends(user)):
         data=rows(db,'SELECT * FROM service_accounts WHERE tenant_id=? ORDER BY created_at',(u['tenant_id'],))
     for a in data:
         a['capabilities']=s.capabilities(a['channel']); a['credentials_configured']=bool(s.token(a))
-        a['token_ref']='WASLA_CHANNEL_'+a['id'].upper()+'_TOKEN'
+        a['token_ref']='LABBILY_CHANNEL_'+a['id'].upper()+'_TOKEN'
     return {'accounts':data,'capabilities':[s.capabilities(c) for c in sorted(s.CHANNELS)]}
 
 @router.post('/api/v2/accounts',status_code=201)
@@ -59,7 +59,7 @@ def create_account(data:dict,u=Depends(user)):
         db.execute('INSERT INTO service_accounts(id,tenant_id,channel,provider_id,label,api_version,state,created_at) VALUES(?,?,?,?,?,?,?,?)',
             (aid,u['tenant_id'],channel,pid,label,api_version,'awaiting_approval' if channel=='tiktok' else 'referral_only' if channel=='snapchat' else 'unverified',now()))
         audit(db,u,'service.account.created',aid,channel)
-    return {'id':aid,'token_ref':'WASLA_CHANNEL_'+aid.upper()+'_TOKEN'}
+    return {'id':aid,'token_ref':'LABBILY_CHANNEL_'+aid.upper()+'_TOKEN'}
 
 @router.post('/api/v2/accounts/{ident}/check')
 def check_account(ident:str,u=Depends(user)):
@@ -390,7 +390,7 @@ def export(u=Depends(user)):
         for t in rows(db,'SELECT * FROM service_tickets WHERE tenant_id=? ORDER BY created_at',(u['tenant_id'],)):
             writer.writerow([("'"+str(t[k])) if str(t[k]).startswith(('=','+','-','@')) else t[k] for k in ['id','status','category','priority','created_at','resolved_at']])
         audit(db,u,'service.exported',u['tenant_id'])
-    return PlainTextResponse('\ufeff'+output.getvalue(),media_type='text/csv',headers={'Content-Disposition':'attachment; filename=wasla-service.csv'})
+    return PlainTextResponse('\ufeff'+output.getvalue(),media_type='text/csv',headers={'Content-Disposition':'attachment; filename=labbily-service.csv'})
 
 @router.get('/api/v2/tickets/{ident}/stream')
 async def ticket_stream(ident:str,request:Request,u=Depends(user)):

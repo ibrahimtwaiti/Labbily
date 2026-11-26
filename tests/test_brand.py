@@ -1,7 +1,7 @@
 import base64
 import unittest
 import test_acceptance
-from wasla.brand import DEFAULTS
+from labbily.brand import DEFAULTS
 
 class BrandAcceptance(unittest.TestCase):
     setUp=test_acceptance.Acceptance.setUp
@@ -16,7 +16,7 @@ class BrandAcceptance(unittest.TestCase):
         self.assertIn('text/css',r.headers['content-type'])
     def test_saved_previous_preset_keeps_provider_layout_and_handles(self):
         import json
-        from wasla.db import transaction, now
+        from labbily.db import transaction, now
         saved = {'name': 'وصلة', 'name_en': 'Wasla', 'font_ar': 'Tajawal', 'font_en': 'Manrope',
                  'primary': '#834dfb', 'sections': ['contact'], 'social_x': 'https://example.test/account'}
         with transaction() as db:

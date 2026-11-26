@@ -9,8 +9,8 @@ from unittest.mock import patch
 from uuid import uuid4
 import httpx
 import test_acceptance as baseline
-from wasla.db import transaction, one, rows, now
-from wasla import service as s
+from labbily.db import transaction, one, rows, now
+from labbily import service as s
 
 class ServiceV2(unittest.TestCase):
     setUp=baseline.Acceptance.setUp
@@ -22,7 +22,7 @@ class ServiceV2(unittest.TestCase):
         r=self.client.post('/api/admin/workspaces/a/integrations',json={'channel':channel,'provider_id':asset,'label':'Test account','api_version':'v27.0'})
         self.assertEqual(r.status_code,201,r.text); aid=r.json()['id']
         self.login()
-        os.environ['WASLA_CHANNEL_'+aid.upper()+'_TOKEN']='synthetic-test-only'
+        os.environ['LABBILY_CHANNEL_'+aid.upper()+'_TOKEN']='synthetic-test-only'
         with transaction() as db: db.execute("UPDATE service_accounts SET state='verified' WHERE id=?",(aid,))
         return aid
 
@@ -62,16 +62,16 @@ class ServiceV2(unittest.TestCase):
 
     def test_storage_failure_never_acknowledged(self):
         self.account();payload={'object':'whatsapp_business_account','entry':[]};raw=json.dumps(payload).encode();sig='sha256='+hmac.new(b'test-webhook-secret',raw,hashlib.sha256).hexdigest()
-        with patch('wasla.service.transaction',side_effect=RuntimeError('storage offline')):
+        with patch('labbily.service.transaction',side_effect=RuntimeError('storage offline')):
             with self.assertRaises(RuntimeError):self.client.post('/api/webhooks/v2/whatsapp',content=raw,headers={'X-Hub-Signature-256':sig})
 
     def test_note_never_dispatched(self):
         aid,t,*_=self.incoming();r=self.enqueue(t,direction='note');self.assertEqual(r.status_code,201,r.text)
-        with patch('wasla.service.provider_request') as provider:self.assertFalse(s.send_outbox());provider.assert_not_called()
+        with patch('labbily.service.provider_request') as provider:self.assertFalse(s.send_outbox());provider.assert_not_called()
 
     def test_accepted_not_delivered_and_first_human_reply(self):
         aid,t,*_=self.incoming(stamp=int(time.time())-240);r=self.enqueue(t);self.assertEqual(r.status_code,201,r.text)
-        with patch('wasla.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'sent1'}]})) as provider:
+        with patch('labbily.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'sent1'}]})) as provider:
             self.assertTrue(s.send_outbox());self.assertFalse(s.send_outbox());provider.assert_called_once()
         report=self.client.get('/api/v2/reports').json()
         self.assertGreaterEqual(report['first_human_median_seconds'],240);self.assertEqual(report['delivery_percent'],0)
@@ -81,30 +81,30 @@ class ServiceV2(unittest.TestCase):
         aid,t,*_=self.incoming();self.enqueue(t)
         with transaction() as db:
             s.apply_status(db,aid,'sent1','read',100);s.apply_status(db,aid,'sent1','delivered',90)
-        with patch('wasla.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'sent1'}]})):s.send_outbox()
+        with patch('labbily.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'sent1'}]})):s.send_outbox()
         with transaction() as db:
             s.apply_status(db,aid,'sent1','sent',110)
             self.assertEqual(one(db,"SELECT status FROM service_messages WHERE direction='out'")['status'],'read')
 
     def test_timeout_is_unknown_and_not_retried(self):
         aid,t,*_=self.incoming();self.enqueue(t)
-        with patch('wasla.service.provider_request',side_effect=httpx.ReadTimeout('timeout')) as p:
+        with patch('labbily.service.provider_request',side_effect=httpx.ReadTimeout('timeout')) as p:
             self.assertTrue(s.send_outbox());self.assertFalse(s.send_outbox());p.assert_called_once()
         with transaction() as db:self.assertEqual(one(db,'SELECT state FROM service_outbox')['state'],'unknown')
 
     def test_retry_after_and_authorization_revocation(self):
         aid,t,*_=self.incoming();self.enqueue(t)
-        with patch('wasla.service.provider_request',return_value=httpx.Response(429,headers={'Retry-After':'120'})):s.send_outbox()
+        with patch('labbily.service.provider_request',return_value=httpx.Response(429,headers={'Retry-After':'120'})):s.send_outbox()
         with transaction() as db:
             out=one(db,'SELECT * FROM service_outbox');self.assertEqual(out['state'],'retry');self.assertGreaterEqual(out['next_attempt'],int(time.time())+119)
             db.execute('UPDATE service_outbox SET next_attempt=0')
-        with patch('wasla.service.provider_request',return_value=httpx.Response(401)):s.send_outbox()
+        with patch('labbily.service.provider_request',return_value=httpx.Response(401)):s.send_outbox()
         with transaction() as db:self.assertEqual(one(db,'SELECT state FROM service_accounts')['state'],'reauthorize')
 
     def test_worker_crash_stale_claim_requires_reconciliation(self):
         aid,t,*_=self.incoming();self.enqueue(t)
         with transaction() as db:db.execute("UPDATE service_outbox SET state='sending',claimed_at=?",(int(time.time())-300,))
-        with patch('wasla.service.provider_request') as provider:self.assertFalse(s.send_outbox());provider.assert_not_called()
+        with patch('labbily.service.provider_request') as provider:self.assertFalse(s.send_outbox());provider.assert_not_called()
         with transaction() as db:self.assertEqual(one(db,'SELECT state FROM service_outbox')['state'],'unknown')
 
     def test_window_expiry_checked_both_at_queue_and_dispatch(self):
@@ -112,7 +112,7 @@ class ServiceV2(unittest.TestCase):
         with transaction() as db:db.execute('UPDATE service_tickets SET last_customer_at=?',(int(time.time()),))
         self.assertEqual(self.enqueue(t).status_code,201)
         with transaction() as db:db.execute('UPDATE service_tickets SET last_customer_at=1')
-        with patch('wasla.service.provider_request') as provider:s.send_outbox();provider.assert_not_called()
+        with patch('labbily.service.provider_request') as provider:s.send_outbox();provider.assert_not_called()
         with transaction() as db:self.assertEqual(one(db,'SELECT state FROM service_outbox')['state'],'blocked')
 
     def test_conflict_and_idempotent_retry(self):
@@ -162,14 +162,14 @@ class ServiceV2(unittest.TestCase):
 
     def test_concurrent_workers_do_not_duplicate_dispatch(self):
         aid,t,*_=self.incoming();self.enqueue(t)
-        with patch('wasla.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'unique-send'}]})) as provider:
+        with patch('labbily.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'unique-send'}]})) as provider:
             with ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(lambda _:s.send_outbox(),range(2)))
             provider.assert_called_once()
 
     def test_suspension_after_queue_blocks_dispatch(self):
         aid,t,*_=self.incoming();self.enqueue(t)
         with transaction() as db:db.execute("UPDATE tenants SET status='suspended' WHERE id='a'")
-        with patch('wasla.service.provider_request') as provider:s.send_outbox();provider.assert_not_called()
+        with patch('labbily.service.provider_request') as provider:s.send_outbox();provider.assert_not_called()
 
     def test_reopen_preserves_first_resolution(self):
         aid,t,*_=self.incoming()
@@ -180,10 +180,10 @@ class ServiceV2(unittest.TestCase):
 
     def oauth_setup(self):
         from cryptography.fernet import Fernet
-        os.environ.update(INSTAGRAM_APP_ID='synthetic-app',INSTAGRAM_APP_SECRET='synthetic-secret',WASLA_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode())
+        os.environ.update(INSTAGRAM_APP_ID='synthetic-app',INSTAGRAM_APP_SECRET='synthetic-secret',LABBILY_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode())
         aid=self.account('instagram','123001')
         # Keep Origin for the test client; configure HTTPS only while starting OAuth.
-        with patch('wasla.service_oauth.redirect_uri',return_value='https://test.example/api/v2/oauth/instagram/callback'):
+        with patch('labbily.service_oauth.redirect_uri',return_value='https://test.example/api/v2/oauth/instagram/callback'):
             r=self.client.post('/api/v2/accounts/'+aid+'/oauth/start',json={})
         self.assertEqual(r.status_code,200,r.text)
         from urllib.parse import urlparse,parse_qs
@@ -211,7 +211,7 @@ class ServiceV2(unittest.TestCase):
         request=httpx.Request('POST','https://api.instagram.com/oauth/access_token')
         short=httpx.Response(200,json={'access_token':'short-token','user_id':'123001','permissions':list({'instagram_business_basic','instagram_business_manage_messages'})},request=request)
         long=httpx.Response(200,json={'access_token':'long-test-token','expires_in':5184000},request=request)
-        with patch('wasla.service_oauth.httpx.post',return_value=short),patch('wasla.service_oauth.httpx.get',return_value=long),patch('wasla.service_oauth.redirect_uri',return_value='https://test.example/api/v2/oauth/instagram/callback'):
+        with patch('labbily.service_oauth.httpx.post',return_value=short),patch('labbily.service_oauth.httpx.get',return_value=long),patch('labbily.service_oauth.redirect_uri',return_value='https://test.example/api/v2/oauth/instagram/callback'):
             r=self.client.post('/api/v2/oauth/instagram/complete',json={'state':state,'code':'one-time-code'})
         self.assertEqual(r.status_code,200,r.text);self.assertNotIn('long-test-token',r.text)
         with transaction() as db:
@@ -223,26 +223,26 @@ class ServiceV2(unittest.TestCase):
 
     def test_oauth_account_mismatch_cannot_replace_token(self):
         aid,state=self.oauth_setup();response=httpx.Response(200,json={'user_id':'123002','access_token':'secret'},request=httpx.Request('POST','https://api.instagram.com/oauth/access_token'))
-        with patch('wasla.service_oauth.httpx.post',return_value=response),patch('wasla.service_oauth.redirect_uri',return_value='https://test.example/api/v2/oauth/instagram/callback'):
+        with patch('labbily.service_oauth.httpx.post',return_value=response),patch('labbily.service_oauth.redirect_uri',return_value='https://test.example/api/v2/oauth/instagram/callback'):
             r=self.client.post('/api/v2/oauth/instagram/complete',json={'state':state,'code':'test'})
         self.assertEqual(r.status_code,409)
         with transaction() as db:self.assertIsNone(one(db,'SELECT * FROM service_secrets'))
 
     def test_attachment_mime_size_and_scanner_failure(self):
-        from wasla.service_media import validate,scan
+        from labbily.service_media import validate,scan
         from fastapi import HTTPException
         for raw,mime in [(b'MZevil','image/png'),(b'','application/pdf'),(b'%PDF-'+b'0'*(5*1024*1024),'application/pdf'),(b'<svg>','image/svg+xml')]:
             with self.assertRaises(HTTPException):validate(raw,mime)
         with self.assertRaises(HTTPException):scan(b'%PDF-1.4 test','application/pdf')
-        os.environ.update(WASLA_MEDIA_SCANNER_URL='https://scanner.example/scan',WASLA_MEDIA_SCANNER_TOKEN='test')
-        with patch('wasla.service_media.httpx.post',return_value=httpx.Response(200,json={'verdict':'infected','sha256':'wrong'},request=httpx.Request('POST','https://scanner.example/scan'))):
+        os.environ.update(LABBILY_MEDIA_SCANNER_URL='https://scanner.example/scan',LABBILY_MEDIA_SCANNER_TOKEN='test')
+        with patch('labbily.service_media.httpx.post',return_value=httpx.Response(200,json={'verdict':'infected','sha256':'wrong'},request=httpx.Request('POST','https://scanner.example/scan'))):
             with self.assertRaises(HTTPException):scan(b'%PDF-1.4 test','application/pdf')
 
     def test_attachment_scoped_upload_and_download(self):
         import base64
         from unittest.mock import MagicMock
         aid,t,*_=self.incoming();raw=b'%PDF-1.4 synthetic';storage=MagicMock();storage.generate_presigned_url.return_value='https://private.example/short-lived'
-        with patch('wasla.service_media.client',return_value=storage),patch('wasla.service_media.scan',return_value=hashlib.sha256(raw).hexdigest()),patch.dict(os.environ,{'WASLA_MEDIA_BUCKET':'isolated-test'}):
+        with patch('labbily.service_media.client',return_value=storage),patch('labbily.service_media.scan',return_value=hashlib.sha256(raw).hexdigest()),patch.dict(os.environ,{'LABBILY_MEDIA_BUCKET':'isolated-test'}):
             r=self.client.post('/api/v2/tickets/'+t['id']+'/attachments',json={'mime_type':'application/pdf','base64':base64.b64encode(raw).decode()});self.assertEqual(r.status_code,201,r.text)
             mid=r.json()['id'];self.assertEqual(self.client.get('/api/v2/attachments/'+mid+'/download').status_code,200)
             self.login('admin-b');self.assertEqual(self.client.get('/api/v2/attachments/'+mid+'/download').status_code,404)
@@ -256,5 +256,5 @@ class ServiceV2(unittest.TestCase):
             db.execute('INSERT INTO service_consents VALUES(?,?,?,?,?,?,NULL)',('consent-template','a',t['identity_id'],'template_messages','test evidence',int(time.time())))
         self.assertEqual(self.enqueue(t,kind='template',template='hello_name',language='ar').status_code,422)
         r=self.enqueue(t,kind='template',template='hello_name',language='ar',parameters=['Customer']);self.assertEqual(r.status_code,201,r.text)
-        with patch('wasla.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'parameterized'}]})) as provider:
+        with patch('labbily.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'parameterized'}]})) as provider:
             s.send_outbox();body=provider.call_args.args[3];self.assertEqual(body['template']['components'][0]['parameters'][0]['text'],'Customer')

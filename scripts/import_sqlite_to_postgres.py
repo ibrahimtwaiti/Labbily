@@ -31,7 +31,7 @@ def main():
             raise SystemExit('Source SQLite integrity check failed')
         tables = {r[0] for r in src.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if not set(TABLES).issubset(tables):
-            raise SystemExit('SQLite source does not contain the complete Wasla V1 schema')
+            raise SystemExit('SQLite source does not contain the complete Labbily V1 schema')
         counts = {table: src.execute('SELECT count(*) FROM "'+table+'"').fetchone()[0] for table in TABLES}
         if not args.apply:
             print('Dry run only; data NOT copied. Table counts:', counts)

@@ -123,7 +123,7 @@ def retry(ident:str,u=Depends(user)):
 async def meta_delete(request:Request):
     from .meta_lifecycle import verify_signed_request
     # The privacy status page can be served on a separate public callback origin.
-    origin=(os.getenv('WASLA_DELETION_STATUS_ORIGIN') or value('WASLA_OAUTH_ORIGIN')).rstrip('/');p=urlparse(origin)
+    origin=(os.getenv('LABBILY_DELETION_STATUS_ORIGIN') or value('LABBILY_OAUTH_ORIGIN')).rstrip('/');p=urlparse(origin)
     if p.scheme!='https' or not p.hostname or p.path or p.query or p.fragment:raise HTTPException(503,'privacy_https_origin_required')
     if request.headers.get('content-type','').split(';')[0]!='application/x-www-form-urlencoded':raise HTTPException(415,'form_required')
     raw=await request.body()
@@ -234,7 +234,7 @@ def process_deletion(job_id=None):
             obj=one(db,'SELECT object_key FROM deletion_objects WHERE job_id=? LIMIT 1',(job['id'],))
             if obj:
                 from .service_media import client
-                client().delete_object(Bucket=value('WASLA_MEDIA_BUCKET'),Key=obj['object_key'])
+                client().delete_object(Bucket=value('LABBILY_MEDIA_BUCKET'),Key=obj['object_key'])
                 db.execute('DELETE FROM deletion_objects WHERE job_id=? AND object_key=?',(job['id'],obj['object_key']));return True
             if a and one(db,"SELECT id FROM meta_page_posts WHERE account_id IN ("+marks(a)+") AND state='sending' AND claimed_at>?",(*a,clock-120)):
                 db.execute('UPDATE deletion_jobs SET next_attempt=? WHERE id=?',(clock+125,job['id']));return True
