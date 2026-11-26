@@ -1,8 +1,8 @@
 import json,os,unittest
 from fastapi import HTTPException
 import test_acceptance as base
-from wasla.db import transaction,one
-from wasla.saas import consume_message,period
+from labbily.db import transaction,one
+from labbily.saas import consume_message,period
 
 class SaaS(unittest.TestCase):
     setUp=base.Acceptance.setUp
@@ -47,8 +47,8 @@ class SaaS(unittest.TestCase):
         data={'company':'Example','name':'Owner','email':'new@example.test','password':'new-password-123456','terms_version':'sandbox-v1'}
         self.assertEqual(self.client.post('/api/auth/register',json=data).status_code,409)
         from cryptography.fernet import Fernet
-        from wasla.service_oauth import cipher
-        os.environ.update(WASLA_SELF_SIGNUP_MODE='test',WASLA_EMAIL_MODE='local',WASLA_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode())
+        from labbily.service_oauth import cipher
+        os.environ.update(LABBILY_SELF_SIGNUP_MODE='test',LABBILY_EMAIL_MODE='local',LABBILY_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode())
         plan=self.plan()
         for _ in range(2):self.assertEqual(self.client.post('/api/auth/register',json=data).status_code,202)
         with transaction() as db:

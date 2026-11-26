@@ -2,8 +2,8 @@ import time
 import unittest
 from unittest.mock import patch
 import test_acceptance as baseline
-from wasla.db import transaction, now, one, uid
-from wasla import agent_engine, service
+from labbily.db import transaction, now, one, uid
+from labbily import agent_engine, service
 
 class AgentStudio(unittest.TestCase):
     setUp=baseline.Acceptance.setUp
@@ -104,11 +104,11 @@ class AgentStudio(unittest.TestCase):
 
     def test_human_ownership_blocks_prepared_send(self):
         base=self.prepare_channel('auto')
-        with patch('wasla.service.token',return_value='isolated-credential'):
+        with patch('labbily.service.token',return_value='isolated-credential'):
             self.inbound('ساعات العمل')
             ticket=self.client.get('/api/v2/tickets').json()[0]
             self.client.post('/api/v2/tickets/'+ticket['id']+'/messages',json={'body':'Human takeover','direction':'note','version':ticket['version']},headers={'Idempotency-Key':uid()}).raise_for_status()
-            with patch('wasla.service.provider_request') as channel:
+            with patch('labbily.service.provider_request') as channel:
                 self.assertTrue(service.send_outbox())
                 channel.assert_not_called()
         with transaction() as db:
@@ -116,7 +116,7 @@ class AgentStudio(unittest.TestCase):
         self.assertEqual(self.client.post('/api/v2/tickets/'+ticket['id']+'/copilot',json={'agent_id':base.rsplit('/',1)[1],'operation':'translate','text':'Hi'}).status_code,409)
 
     def test_workflow_tools_require_permission_and_job_cancels_on_takeover(self):
-        from wasla.agent_jobs import process_job
+        from labbily.agent_jobs import process_job
         base=self.prepare_channel('auto')
         cfg=self.client.get(base).json()['draft']
         cfg['rules']=[{'field':'text','value':'schedule','action':'availability'}]
@@ -130,12 +130,12 @@ class AgentStudio(unittest.TestCase):
         self.inbound('my schedule')
         t=self.client.get('/api/v2/tickets').json()[0]
         self.client.post('/api/v2/inbox-actions',json={'tickets':[{'id':t['id'],'version':t['version']}],'action':'take'}).raise_for_status()
-        with patch('wasla.agent_jobs.lookup') as remote:
+        with patch('labbily.agent_jobs.lookup') as remote:
             self.assertTrue(process_job());remote.assert_not_called()
         with transaction() as db:self.assertEqual(one(db,'SELECT result FROM agent_runs')['result'],'canceled')
 
     def test_external_availability_and_agent_send_use_existing_outbox(self):
-        from wasla.agent_jobs import process_job
+        from labbily.agent_jobs import process_job
         base=self.prepare_channel('auto')
         cfg=self.client.get(base).json()['draft']
         cfg['tools'].append('availability')
@@ -144,7 +144,7 @@ class AgentStudio(unittest.TestCase):
         self.client.post(base+'/playground',json={'question':'موعد غدا','expected':'availability','save':True}).raise_for_status()
         self.client.post(base+'/publish',json={'revision':2}).raise_for_status()
         self.inbound('موعد غدا')
-        with patch('wasla.agent_jobs.lookup',return_value='09:30'),patch('wasla.service.token',return_value='test'):
+        with patch('labbily.agent_jobs.lookup',return_value='09:30'),patch('labbily.service.token',return_value='test'):
             self.assertTrue(process_job())
             self.assertFalse(process_job())
         with transaction() as db:
@@ -152,7 +152,7 @@ class AgentStudio(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM service_outbox').fetchone()[0],1)
 
     def test_semantic_review_is_tenant_scoped_and_metered(self):
-        from wasla.agent_retrieval import process_knowledge,semantic
+        from labbily.agent_retrieval import process_knowledge,semantic
         base,cfg=self.build()
         doc=self.client.post('/api/v2/agent-knowledge/import',json={'title':'Policy','text':'A verified appointment is required.'}).json()['id']
         record=self.client.get('/api/v2/agent-knowledge/'+doc).json()
@@ -161,7 +161,7 @@ class AgentStudio(unittest.TestCase):
         self.client.put('/api/admin/workspaces/a/agent-policy',json={'max_agents':3,'monthly_runs':10,'live_enabled':False,'external_enabled':True}).raise_for_status()
         self.login()
         import os
-        with patch.dict(os.environ,{'LABBILY_OPENAI_KEY':'fixture','LABBILY_EMBEDDING_MODEL':'fixture-embed','LABBILY_EMBEDDING_INPUT_USD':'1'}),patch('wasla.agent_retrieval.ai_vectors',return_value=([[0.2,0.5]],{'prompt_tokens':7})):
+        with patch.dict(os.environ,{'LABBILY_OPENAI_KEY':'fixture','LABBILY_EMBEDDING_MODEL':'fixture-embed','LABBILY_EMBEDDING_INPUT_USD':'1'}),patch('labbily.agent_retrieval.ai_vectors',return_value=([[0.2,0.5]],{'prompt_tokens':7})):
             self.client.post('/api/v2/agent-knowledge/'+doc+'/index',json={}).raise_for_status()
             self.assertTrue(process_knowledge())
             parsed={'documents':[{'id':doc,'checksum':record['checksum'],'title':'Policy','chunks':[record['content']]}]}
@@ -194,7 +194,7 @@ class AgentStudio(unittest.TestCase):
         print('agent_benchmark local_faq_60 queries=100 p50_ms=%.3f p95_ms=%.3f'%(median(samples),sorted(samples)[94]))
 
     def test_signed_action_requires_approval_and_does_not_replay(self):
-        from wasla.agent_jobs import process_job
+        from labbily.agent_jobs import process_job
         base=self.prepare_channel('suggest')
         cfg=self.client.get(base).json()['draft']
         cfg['tools'].append('webhook');cfg['rules']=[{'field':'text','value':'escalate','action':'webhook'}]
@@ -204,7 +204,7 @@ class AgentStudio(unittest.TestCase):
         with transaction() as db:db.execute("INSERT INTO agent_connections VALUES('a','webhook','https://public.example.test/path','test-cipher',?)",(now(),))
         self.inbound('escalate')
         item=self.client.get('/api/v2/agent-approvals').json()[0]
-        with patch('wasla.agent_jobs.call_webhook',return_value='Acknowledged') as external:
+        with patch('labbily.agent_jobs.call_webhook',return_value='Acknowledged') as external:
             self.assertFalse(process_job());external.assert_not_called()
             self.client.post('/api/v2/agent-approvals/'+item['id'],json={'approve':True}).raise_for_status()
             self.assertTrue(process_job());self.assertFalse(process_job());external.assert_called_once()
@@ -212,7 +212,7 @@ class AgentStudio(unittest.TestCase):
         with transaction() as db:self.assertEqual(db.execute('SELECT count(*) FROM service_outbox').fetchone()[0],0)
 
     def test_model_failure_hands_over_instead_of_fabricating(self):
-        from wasla.agent_jobs import process_job
+        from labbily.agent_jobs import process_job
         self.prepare_channel('auto')
         a=self.client.get('/api/v2/agents').json()['agents'][0]
         base='/api/v2/agents/'+a['id'];cfg=self.client.get(base).json()['draft']
@@ -222,7 +222,7 @@ class AgentStudio(unittest.TestCase):
         self.client.post(base+'/publish',json={'revision':2}).raise_for_status()
         with transaction() as db:db.execute("UPDATE agent_limits SET external_enabled=1 WHERE tenant_id='a'")
         self.inbound('Unrelated question')
-        with patch('wasla.agent_jobs.select_source',side_effect=ValueError('unavailable')):self.assertTrue(process_job())
+        with patch('labbily.agent_jobs.select_source',side_effect=ValueError('unavailable')):self.assertTrue(process_job())
         with transaction() as db:
             self.assertEqual(one(db,'SELECT result FROM agent_runs')['result'],'handover')
             self.assertEqual(db.execute('SELECT COUNT(*) FROM service_outbox').fetchone()[0],0)

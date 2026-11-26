@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: wasla-production-retention
+  group: labbily-production-retention
   cancel-in-progress: false
 jobs:
   retention:
@@ -31,11 +31,11 @@ jobs:
       - name: Report due deletions without exposing customer data
         env:
           DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
-          WASLA_ENV: production
+          LABBILY_ENV: production
         run: python -m scripts.retention_cleanup
       - name: Enforce approved bounded retention rules
         env:
           DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
-          WASLA_ENV: production
-          WASLA_RETENTION_APPLY: 'YES'
+          LABBILY_ENV: production
+          LABBILY_RETENTION_APPLY: 'YES'
         run: python -m scripts.retention_cleanup --apply

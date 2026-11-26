@@ -1,4 +1,4 @@
-# Wasla V1 | Neon and Vercel deployment
+# Labbily V1 | Neon and Vercel deployment
 
 ## Environments
 - An independent Neon project, with production and preview-v1 branches.
@@ -8,12 +8,12 @@
 - The default Neon database has no operator accounts and no real customer data migrated from SQLite.
 
 ## Security
-- WASLA_ENV=production ensures secure cookies and HTTPS requirements.
+- LABBILY_ENV=production ensures secure cookies and HTTPS requirements.
 - On Vercel, same-origin POST is checked against the requested host.
-- WASLA_WORKER_SECRET (minimum 32 chars) is an independently generated secret stored only in Vercel and the Neon Function environment; never in Git.
+- LABBILY_WORKER_SECRET (minimum 32 chars) is an independently generated secret stored only in Vercel and the Neon Function environment; never in Git.
 - To reach an SSO-protected preview, the Neon scheduler uses a Vercel automation bypass secret. This secret is only for the server-to-server scheduler and must be kept private; rotate on suspicion of disclosure.
 - GET /api/health is a live database health check.
-- Use a trusted operator terminal and an unpooled Neon connection to invoke python -m wasla.cli bootstrap. The email and password are entered interactively; The optional /setup flow requires an expiring random capability and refuses once any provider exists; see PRODUCTION_RELEASE_AR.md.
+- Use a trusted operator terminal and an unpooled Neon connection to invoke python -m labbily.cli bootstrap. The email and password are entered interactively; The optional /setup flow requires an expiring random capability and refuses once any provider exists; see PRODUCTION_RELEASE_AR.md.
 - Configure separate webhook Meta secrets only after obtaining a real authorized Meta app. Send is intentionally disabled in V1.
 
 ## Durable event processing

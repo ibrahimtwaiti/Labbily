@@ -19,11 +19,11 @@ def main():
     args=parser.parse_args()
     if not 10<=args.messages<=10000 or not 1<=args.workers<=16:parser.error('messages 10–10000; workers 1–16')
     # Clear remote DB selectors before even constructing the disposable test fixture.
-    os.environ.pop('DATABASE_URL',None);os.environ.pop('WASLA_DATABASE_URL',None)
+    os.environ.pop('DATABASE_URL',None);os.environ.pop('LABBILY_DATABASE_URL',None)
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tests'))
     from test_acceptance import Acceptance
-    from wasla.db import transaction,one
-    from wasla import service
+    from labbily.db import transaction,one
+    from labbily import service
     fixture=Acceptance();fixture.setUp()
     try:
         fixture.login('provider')

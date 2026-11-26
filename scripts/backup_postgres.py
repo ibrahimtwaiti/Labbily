@@ -132,8 +132,8 @@ def backup():
     env = database_env(os.environ['BACKUP_DATABASE_URL'])
     r2_settings()  # Fail before reading production if destination is not configured.
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    with tempfile.TemporaryDirectory(prefix='wasla-backup-') as folder:
-        dump_path = Path(folder) / ('wasla-' + stamp + '-' + uuid4().hex + '.dump')
+    with tempfile.TemporaryDirectory(prefix='labbily-backup-') as folder:
+        dump_path = Path(folder) / ('labbily-' + stamp + '-' + uuid4().hex + '.dump')
         # A private, non-shared runner must be used; the temporary file holds raw DB data.
         fd = os.open(dump_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         print('Stage NEON_DUMP_STARTED', flush=True)
@@ -144,7 +144,7 @@ def backup():
             raise BackupStageError('NEON_PGDUMP_' + failure_classification(getattr(result, 'stderr', b''), 'db'))
         print('Stage NEON_DUMP_COMPLETE; R2 upload starting', flush=True)
         key, digest = upload_r2(dump_path)
-        output_path = os.environ.get('GITHUB_OUTPUT') if os.environ.get('WASLA_BACKUP_WRITE_OUTPUTS') == '1' else None
+        output_path = os.environ.get('GITHUB_OUTPUT') if os.environ.get('LABBILY_BACKUP_WRITE_OUTPUTS') == '1' else None
         if output_path:
             # Only public object locator and digest go to job outputs, never DB contents.
             with open(output_path, 'a', encoding='utf-8') as output:

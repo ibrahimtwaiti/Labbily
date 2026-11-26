@@ -36,7 +36,7 @@ def session(db,state,request,u,stage):
     from .saas import lock_tenant
     lock_tenant(db,u['tenant_id'])
     r=one(db,'SELECT * FROM meta_page_sessions WHERE state_hash=?'+(' FOR UPDATE' if postgres() else ''),(digest(state),))
-    if not r or r['tenant_id']!=u['tenant_id'] or r['user_id']!=u['id'] or r['session_hash']!=digest(request.cookies.get('wasla_session','')) or r['expires_at']<=int(time.time()) or r['stage']!=stage:raise HTTPException(403,'invalid_facebook_session')
+    if not r or r['tenant_id']!=u['tenant_id'] or r['user_id']!=u['id'] or r['session_hash']!=digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))) or r['expires_at']<=int(time.time()) or r['stage']!=stage:raise HTTPException(403,'invalid_facebook_session')
     if r['app_id']!=value('META_APP_ID') or r['config_id']!=value('META_FACEBOOK_CONFIG_ID') or r['api_version']!=value('META_GRAPH_VERSION'):raise HTTPException(409,'facebook_configuration_changed')
     return r
 
@@ -53,7 +53,7 @@ def start(request:Request,u=Depends(user)):
     c=config(u);throttle(u['tenant_id']);state=secrets.token_urlsafe(32)
     with transaction() as db:
         db.execute('DELETE FROM meta_page_sessions WHERE expires_at<?',(int(time.time()),))
-        db.execute('INSERT INTO meta_page_sessions(state_hash,tenant_id,user_id,session_hash,app_id,config_id,api_version,expires_at) VALUES(?,?,?,?,?,?,?,?)',(digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('wasla_session','')),c['META_APP_ID'],c['META_FACEBOOK_CONFIG_ID'],c['META_GRAPH_VERSION'],int(time.time())+600))
+        db.execute('INSERT INTO meta_page_sessions(state_hash,tenant_id,user_id,session_hash,app_id,config_id,api_version,expires_at) VALUES(?,?,?,?,?,?,?,?)',(digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))),c['META_APP_ID'],c['META_FACEBOOK_CONFIG_ID'],c['META_GRAPH_VERSION'],int(time.time())+600))
     return {'state':state,'app_id':c['META_APP_ID'],'config_id':c['META_FACEBOOK_CONFIG_ID'],'api_version':c['META_GRAPH_VERSION']}
 
 @router.post('/api/v2/meta/pages/exchange')

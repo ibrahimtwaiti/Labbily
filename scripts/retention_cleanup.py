@@ -1,4 +1,4 @@
-"""Conservative Wasla V1 retention job.
+"""Conservative Labbily V1 retention job.
 
 Only delete well-defined categories whose reference graph can be checked safely.
 Complex CRM, closed projects and terminated tenant exports require verified
@@ -10,10 +10,10 @@ import calendar
 import os
 from datetime import datetime, timezone, timedelta
 from .backup_postgres import database_env
-from wasla.db import transaction, postgres
+from labbily.db import transaction, postgres
 
 SOURCE_HOST = 'ep-dawn-mode-basxmcbr.c-8.eu-central-1.aws.neon.tech'
-SOURCE_DATABASE = 'wasla'
+SOURCE_DATABASE = 'labbily'
 
 
 def subtract_months(at, months):
@@ -93,13 +93,13 @@ def main():
     url = os.environ.get('DATABASE_URL','')
     env=database_env(url)
     if env['PGHOST']!=SOURCE_HOST or env['PGDATABASE']!=SOURCE_DATABASE:
-        raise SystemExit('Refusing retention outside the approved Wasla production source')
-    if args.apply and os.environ.get('WASLA_RETENTION_APPLY')!='YES':
-        raise SystemExit('Set WASLA_RETENTION_APPLY=YES to authorize retention mutation')
+        raise SystemExit('Refusing retention outside the approved Labbily production source')
+    if args.apply and os.environ.get('LABBILY_RETENTION_APPLY')!='YES':
+        raise SystemExit('Set LABBILY_RETENTION_APPLY=YES to authorize retention mutation')
     with transaction() as db:
-        db.execute("SELECT pg_advisory_xact_lock(hashtext('wasla-retention-v1'))")
+        db.execute("SELECT pg_advisory_xact_lock(hashtext('labbily-retention-v1'))")
         report=execute(db,datetime.now(timezone.utc),apply=args.apply)
-    print('Wasla retention mode:',report['mode'])
+    print('Labbily retention mode:',report['mode'])
     for key,count in report['counts'].items():
         print(key+':', count, 'candidate rows within bounded batch')
     print('No customer content was logged. Closed projects and tenant offboarding still require separate review.')

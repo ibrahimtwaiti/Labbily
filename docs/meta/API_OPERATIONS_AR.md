@@ -4,7 +4,7 @@
 
 ## المصادقة والعقود
 
-كل `/api/v2/meta/*` يتطلب جلسة وصلة سارية وصلاحية `settings`. الكتابة تتطلب Origin مطابقًا و`X-CSRF-Token`. لا تقبل المسارات tenant_id من JSON؛ تُؤخذ الشركة من الجلسة. مخطط OpenAPI يصف أجسام CompleteSignup/RegisterPhone، ويُولد من مسارات الخادم في `/api/v2/meta/openapi.json` للمستخدم المخول. Cookie/CSRF موثقان في securitySchemes أيضًا؛ لا يُصدر مفتاح API جديدًا.
+كل `/api/v2/meta/*` يتطلب جلسة Labbily سارية وصلاحية `settings`. الكتابة تتطلب Origin مطابقًا و`X-CSRF-Token`. لا تقبل المسارات tenant_id من JSON؛ تُؤخذ الشركة من الجلسة. مخطط OpenAPI يصف أجسام CompleteSignup/RegisterPhone، ويُولد من مسارات الخادم في `/api/v2/meta/openapi.json` للمستخدم المخول. Cookie/CSRF موثقان في securitySchemes أيضًا؛ لا يُصدر مفتاح API جديدًا.
 
 | الطريقة والمسار | المدخل/المخرج | الأثر |
 |---|---|---|
@@ -22,9 +22,9 @@
 
 ## إعداد المعاينة
 
-1. قاعدة مستقلة عن الإنتاج. نسخة احتياطية قابلة للاستعادة قبل migration. تشغيل `python -m wasla.cli init` ببيئة المعاينة؛ لا ترحيل PostgreSQL أثناء HTTP request.
-2. مفتاح `WASLA_TOKEN_ENCRYPTION_KEY` آمن ومتوافق مع الرموز الموجودة. لا تغييره دون إعادة تشفير واستعادة مختبرتين.
-3. من لوحة المدير: META_APP_ID، META_APP_SECRET، META_SIGNUP_CONFIG_ID، META_GRAPH_VERSION (`v25.0` أو `v26.0`)، META_SYSTEM_USER_TOKEN للفحص، META_VERIFY_TOKEN، WASLA_OAUTH_ORIGIN.
+1. قاعدة مستقلة عن الإنتاج. نسخة احتياطية قابلة للاستعادة قبل migration. تشغيل `python -m labbily.cli init` ببيئة المعاينة؛ لا ترحيل PostgreSQL أثناء HTTP request.
+2. مفتاح `LABBILY_TOKEN_ENCRYPTION_KEY` آمن ومتوافق مع الرموز الموجودة. لا تغييره دون إعادة تشفير واستعادة مختبرتين.
+3. من لوحة المدير: META_APP_ID، META_APP_SECRET، META_SIGNUP_CONFIG_ID، META_GRAPH_VERSION (`v25.0` أو `v26.0`)، META_SYSTEM_USER_TOKEN للفحص، META_VERIFY_TOKEN، LABBILY_OAUTH_ORIGIN.
 4. META_SIGNUP_MODE=`test` وMETA_TEST_TENANTS قائمة معرفات شركات اختبار مفصولة بفواصل. لا تستخدم production؛ API يرفضه عمدًا حتى إغلاق إطلاق الخدمة.
 5. فتح `/app/channels` بمدير الشركة: تجهيز الربط، ثم متابعة إلى Meta من نقرة مباشرة لتجنب حظر popup. لا إدخال token يدوي للعميل.
 6. بعد التفويض: تسجيل الرقم القياسي واشتراك الأحداث، ثم فحص الحساب ومزامنة القوالب واختبار الوارد والصادر بأهداف مأذونة.
@@ -61,9 +61,9 @@
 - `GET /api/v2/billing`, `POST /api/v2/billing/invoice`: مدير الشركة فقط؛ مسودة غير قابلة للدفع وغير ضريبية، واحدة لكل شهر UTC، بلا رسوم Meta.
 - حصة outbound_messages تحجز داخل معاملة إنشاء الرسالة. إعادة نفس Idempotency-Key لا تحجز مرتين. لا يُعاد احتساب المحاولات. لا تخصم الملاحظات الداخلية. التراجع عن المعاملة يعيد الحصة. الرسائل المقبولة في الطابور تستهلك الحصة ولو فشلت لاحقًا؛ هذا حد تشغيل وليس رسمًا ماليًا.
 - العملاء الحاليون دون اشتراك يحتفظون بسلوكهم الحالي؛ يجب إسناد خطة لتطبيق حدودها. حدود المقاعد/الحسابات ومحاسبة التكلفة الفعلية غير منفذة.
-- `POST /api/auth/register`: مغلق افتراضيًا؛ إعداد WASLA_SELF_SIGNUP_MODE=test يتيح طلبًا مع حساب معطل حتى المراجعة. `POST /api/admin/commerce/registrations/{tenant}/approve` يتطلب مرجع تحقق خارجي وإسناد خطة. لا يوجد إرسال بريد تحقق تلقائي.
+- `POST /api/auth/register`: مغلق افتراضيًا؛ إعداد LABBILY_SELF_SIGNUP_MODE=test يتيح طلبًا مع حساب معطل حتى المراجعة. `POST /api/admin/commerce/registrations/{tenant}/approve` يتطلب مرجع تحقق خارجي وإسناد خطة. لا يوجد إرسال بريد تحقق تلقائي.
 - مسارات الواجهة: `/signup`, `/app/billing`, `/app/commerce`. جميع عمليات الإدارة تستخدم جلسة وCSRF.
 
-ترحيلات 008–010 إضافية، تتطلب `python -m wasla.cli init` في بيئة اختبار أولًا. لا تنفذ أثناء الطلبات على PostgreSQL. يعاد بناء قيد قنوات SQLite داخل معاملة، مع فحص سلامة العلاقات والحفاظ على البيانات. لا تغيير لبيانات الإنتاج في هذا العمل.
+ترحيلات 008–010 إضافية، تتطلب `python -m labbily.cli init` في بيئة اختبار أولًا. لا تنفذ أثناء الطلبات على PostgreSQL. يعاد بناء قيد قنوات SQLite داخل معاملة، مع فحص سلامة العلاقات والحفاظ على البيانات. لا تغيير لبيانات الإنتاج في هذا العمل.
 
 المراجع الرسمية: https://developers.facebook.com/documentation/business-messaging/messenger-platform/send-messages وhttps://developers.facebook.com/docs/pages-api/webhooks-for-pages/ وhttps://developers.facebook.com/documentation/facebook-login/guides/advanced/manual-flow/ .

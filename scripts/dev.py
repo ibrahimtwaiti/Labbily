@@ -9,6 +9,6 @@ parser.add_argument('--port',type=int,default=8000)
 parser.add_argument('--strictPort',action='store_true')
 args=parser.parse_args()
 # Explicit local configuration only; never infer trusted origins from request headers.
-if os.path.exists('.preview-origin') and os.environ.get('WASLA_ENV','development')=='development':
-    with open('.preview-origin') as source: os.environ['WASLA_ORIGIN']=source.read().strip()
-uvicorn.run('wasla.main:app',host=args.host,port=args.port)
+if os.path.exists('.preview-origin') and os.environ.get('LABBILY_ENV','development')=='development':
+    with open('.preview-origin') as source: os.environ['LABBILY_ORIGIN']=source.read().strip()
+uvicorn.run('labbily.main:app',host=args.host,port=args.port)

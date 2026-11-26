@@ -1,4 +1,4 @@
-"""Restore a trusted Wasla custom archive into an empty stock PostgreSQL database.
+"""Restore a trusted Labbily custom archive into an empty stock PostgreSQL database.
 
 PGHOST, PGDATABASE and the other libpq settings select the restore target.
 Data rows, indexes, constraints, function bodies and quoted SQL stay intact.
@@ -23,7 +23,7 @@ EMPTY_TARGET = """DO $$ BEGIN
        OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace='public'::regnamespace)
        OR EXISTS (SELECT 1 FROM pg_type WHERE typnamespace='public'::regnamespace)
        OR EXISTS (SELECT 1 FROM pg_extension WHERE extname <> 'plpgsql') THEN
-        RAISE EXCEPTION 'Wasla restore requires an empty target database';
+        RAISE EXCEPTION 'Labbily restore requires an empty target database';
     END IF;
 END $$;
 """
@@ -63,7 +63,7 @@ def run_checked(args, stage, *, env=None, stdout=None):
 def restore(archive, target_env):
     if not target_env.get('PGDATABASE'):
         raise ValueError('Set PGDATABASE explicitly to an empty restore database')
-    with tempfile.TemporaryDirectory(prefix='wasla-offline-restore-') as directory:
+    with tempfile.TemporaryDirectory(prefix='labbily-offline-restore-') as directory:
         root = Path(directory)
         pre, remaining = root / 'schema.sql', root / 'rows-and-constraints.sql'
         base = ['pg_restore', '--no-owner', '--no-acl', '--file=-']

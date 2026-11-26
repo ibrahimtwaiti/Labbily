@@ -53,7 +53,7 @@ def readiness(u=Depends(user)):
     permit(u,'settings')
     with transaction() as db:accounts=rows(db,'SELECT * FROM service_accounts WHERE tenant_id=?',(u['tenant_id'],))
     return {'accounts':[{'id':a['id'],'channel':a['channel'],'approval_documented':bool(a['approval_reference']),'credentials_configured':bool(s.token(a)),'inbound_observed':bool(a['last_inbound_at']),'outbound_accepted':bool(a['last_outbound_at']),'expires_at':a['expires_at'],'state':a['state']} for a in accounts],
-        'media_configuration':{k:bool(configured_value(k)) for k in ['WASLA_MEDIA_ENDPOINT','WASLA_MEDIA_BUCKET','WASLA_MEDIA_ACCESS_KEY_ID','WASLA_MEDIA_SECRET_ACCESS_KEY','WASLA_MEDIA_SCANNER_URL','WASLA_MEDIA_SCANNER_TOKEN']},
+        'media_configuration':{k:bool(configured_value(k)) for k in ['LABBILY_MEDIA_ENDPOINT','LABBILY_MEDIA_BUCKET','LABBILY_MEDIA_ACCESS_KEY_ID','LABBILY_MEDIA_SECRET_ACCESS_KEY','LABBILY_MEDIA_SCANNER_URL','LABBILY_MEDIA_SCANNER_TOKEN']},
         'tiktok':'blocked_pending_approved_business_messaging_contract','production_approved':False}
 
 @router.post('/api/v2/identities/{ident}/crm')

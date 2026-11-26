@@ -6,9 +6,9 @@ from unittest.mock import patch
 import httpx
 from cryptography.fernet import Fernet
 import test_acceptance as base
-from wasla.db import transaction, one
-from wasla import meta_onboarding as meta
-from wasla.security import digest
+from labbily.db import transaction, one
+from labbily import meta_onboarding as meta
+from labbily.security import digest
 
 class MetaOnboarding(unittest.TestCase):
     setUp=base.Acceptance.setUp
@@ -16,7 +16,7 @@ class MetaOnboarding(unittest.TestCase):
     login=base.Acceptance.login
 
     def configure(self):
-        os.environ.update(WASLA_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),META_APP_ID='123',META_SIGNUP_CONFIG_ID='456',META_GRAPH_VERSION='v26.0',META_SIGNUP_MODE='test',META_TEST_TENANTS='a,b',META_SYSTEM_USER_TOKEN='system-secret',WASLA_OAUTH_ORIGIN='https://app.example.test')
+        os.environ.update(LABBILY_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),META_APP_ID='123',META_SIGNUP_CONFIG_ID='456',META_GRAPH_VERSION='v26.0',META_SIGNUP_MODE='test',META_TEST_TENANTS='a,b',META_SYSTEM_USER_TOKEN='system-secret',LABBILY_OAUTH_ORIGIN='https://app.example.test')
         self.login()
 
     def start(self):
@@ -29,7 +29,7 @@ class MetaOnboarding(unittest.TestCase):
         return [httpx.Response(200,json={'access_token':'customer-secret'}),httpx.Response(200,json={'data':info}),httpx.Response(200,json={'data':[{'id':'901','verified_name':'Customer'}]})]
 
     def complete(self,state,responses=None,**overrides):
-        with patch('wasla.meta_onboarding.httpx.request',side_effect=responses or self.responses()) as call:
+        with patch('labbily.meta_onboarding.httpx.request',side_effect=responses or self.responses()) as call:
             r=self.client.post('/api/v2/meta/whatsapp/complete',json={'state':state,'code':'code-secret','business_account_id':'900','phone_number_id':'901',**overrides})
         return r,call
 
@@ -76,7 +76,7 @@ class MetaOnboarding(unittest.TestCase):
 
     def test_subscribe_register_and_disconnect(self):
         aid=self.connected();path='/api/v2/meta/accounts/'+aid
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'success':True})):
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'success':True})):
             self.assertEqual(self.client.post(path+'/subscribe',json={}).status_code,200)
             self.assertEqual(self.client.post(path+'/register',json={'pin':'123456'}).status_code,200)
         with transaction() as db:
@@ -84,8 +84,8 @@ class MetaOnboarding(unittest.TestCase):
             self.assertNotIn('123456',str([dict(x) for x in db.execute('SELECT * FROM audit').fetchall()]))
         self.client.post('/api/v2/accounts/'+aid+'/disconnect',json={})
         self.assertEqual(self.client.post(path+'/subscribe',json={}).status_code,409)
-        from wasla.service import token
-        os.environ['WASLA_CHANNEL_'+aid.upper()+'_TOKEN']='legacy-secret'
+        from labbily.service import token
+        os.environ['LABBILY_CHANNEL_'+aid.upper()+'_TOKEN']='legacy-secret'
         with transaction() as db:self.assertEqual(token(one(db,'SELECT * FROM service_accounts WHERE id=?',(aid,))),'')
 
     def test_provider_errors_are_redacted_and_not_retried(self):
@@ -117,7 +117,7 @@ class MetaOnboarding(unittest.TestCase):
             self.assertEqual(self.client.put('/api/admin/integrations/configuration',json={'values':{key:val}}).status_code,422)
 
     def test_incomplete_onboarding_blocks_sending(self):
-        from wasla.service import policy
+        from labbily.service import policy
         from fastapi import HTTPException
         aid=self.connected()
         with transaction() as db:
@@ -127,7 +127,7 @@ class MetaOnboarding(unittest.TestCase):
 
     def test_failed_subscription_does_not_become_connected(self):
         aid=self.connected()
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'success':False})):
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'success':False})):
             r=self.client.post('/api/v2/meta/accounts/'+aid+'/subscribe',json={})
         self.assertEqual(r.status_code,502)
         with transaction() as db:self.assertEqual(one(db,'SELECT subscription_state FROM meta_connections WHERE account_id=?',(aid,))['subscription_state'],'pending')
@@ -160,7 +160,7 @@ class MetaOnboarding(unittest.TestCase):
 
     def test_health_invalid_erases_secret_and_requires_signup(self):
         aid=self.connected();path='/api/v2/meta/accounts/'+aid+'/token-health'
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':{'is_valid':False}})):
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(200,json={'data':{'is_valid':False}})):
             result=self.client.post(path,json={});self.assertEqual(result.status_code,200,result.text)
             self.assertEqual(result.json()['health'],'reauthorize')
         with transaction() as db:self.assertIsNone(one(db,'SELECT * FROM service_secrets WHERE account_id=?',(aid,)))
@@ -168,7 +168,7 @@ class MetaOnboarding(unittest.TestCase):
 
     def test_health_outage_preserves_token_and_tenant_isolation(self):
         aid=self.connected();path='/api/v2/meta/accounts/'+aid+'/token-health'
-        with patch('wasla.meta_onboarding.httpx.request',return_value=httpx.Response(503,json={'error':{'code':2}})):
+        with patch('labbily.meta_onboarding.httpx.request',return_value=httpx.Response(503,json={'error':{'code':2}})):
             self.assertEqual(self.client.post(path,json={}).status_code,502)
         with transaction() as db:self.assertIsNotNone(one(db,'SELECT * FROM service_secrets WHERE account_id=?',(aid,)))
         self.login('admin-b');self.assertEqual(self.client.post(path,json={}).status_code,404)

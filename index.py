@@ -1,1 +1,1 @@
-from wasla.main import app
+from labbily.main import app

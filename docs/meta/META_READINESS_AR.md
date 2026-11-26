@@ -2,14 +2,14 @@
 
 # جاهزية Meta ومتطلبات تدخل المالك
 
-تحديث 24 نوفمبر 2026. يسجل [تقرير التشغيل](../../WASLA_PRODUCTION_READINESS.md) المعاينة المستقلة وعناوين الاستقبال ونتائج الفحص. الحساب المطور منشأ بحسب المالك؛ لا يوجد في هذا التسليم دليل على اكتمال تحقق النشاط أو App Review أو صفة شراكة.
+تحديث 24 نوفمبر 2026. يسجل [تقرير التشغيل](../../LABBILY_PRODUCTION_READINESS.md) المعاينة المستقلة وعناوين الاستقبال ونتائج الفحص. الحساب المطور منشأ بحسب المالك؛ لا يوجد في هذا التسليم دليل على اكتمال تحقق النشاط أو App Review أو صفة شراكة.
 
 ## التصنيفات منفصلة
 
 - حساب Meta Developer يتيح تطوير التطبيقات؛ إنشاؤه ليس اعتمادًا لتقديم الخدمة لشركات أخرى.
 - Tech Provider يتعلق بتقديم خدمات عبر بيانات وأصول شركات العملاء، ويتطلب إجراءات Meta المناسبة. Access Verification لا يغني عن App Review وAdvanced Access.
 - Tech Partner مسار ترقية/شراكة مستقل عن مجرد حساب المطور أو جاهزية الكود.
-- Solution Partner مسار مختلف، ومنه امتياز مشاركة خط ائتمان وفق الأهلية؛ لم تنفذه وصلة ولم تفترض امتلاكه.
+- Solution Partner مسار مختلف، ومنه امتياز مشاركة خط ائتمان وفق الأهلية؛ لم تنفذه Labbily ولم تفترض امتلاكه.
 
 المصدران: [Tech Providers](https://developers.facebook.com/docs/development/release/tech-providers/) و[تصنيفات شركاء WhatsApp](https://whatsappbusiness.com/partners/become-a-partner/).
 
@@ -44,7 +44,7 @@
 
 هذه صلاحيات بحسب العمليات المذكورة، وليست طلبًا شاملًا لكل scopes. لا تُفعّل خدمة بمجرد تسجيل اسم صلاحية في DB.
 
-| الخدمة وAPI | الوظائف المقصودة | الصلاحيات الأساسية بحسب المسار | الحساب والمراجعة | القيود | حالة وصلة وتدخل المالك |
+| الخدمة وAPI | الوظائف المقصودة | الصلاحيات الأساسية بحسب المسار | الحساب والمراجعة | القيود | حالة Labbily وتدخل المالك |
 |---|---|---|---|---|---|
 | WhatsApp Cloud API | رسائل، قوالب، أرقام وWebhooks | whatsapp_business_messaging، whatsapp_business_management؛ business_management فقط إذا احتاجت عملية محددة موثقة | حساب أعمال/مراسلة ورقم مؤهل؛ مراجعة ووصول مناسب لأصول الآخرين | موافقات مراسلة، نافذة الخدمة، قوالب معتمدة، حدود الحساب وطريقة دفع Meta | V2 + onboarding جديد مختبران اصطناعيًا؛ يلزم حساب وتفويض واختبار حي |
 | Instagram API with Instagram Login | معلومات احترافية ورسائل مدعومة | instagram_business_basic، instagram_business_manage_messages | حساب احترافي مؤهل ومراجعة الصلاحيات | ليس Facebook Login؛ لا تُخلط scopes المسارين؛ لا نفترض كل أنواع الوسائط | موصل V2 موجود؛ يحتاج موافقات وحساب اختبار |
@@ -52,7 +52,7 @@
 | Pages API | اختيار صفحة وقراءة بياناتها | pages_show_list، pages_read_engagement؛ scopes إضافية فقط للوظائف المختارة | Page access token ومهام الصفحة والوصول الملائم | إدارة المنشورات تحتاج مراجعة منفصلة؛ لا وصول تلقائي لبيانات عامة | اختيار الصفحة وقراءة الملف والاشتراك والفصل منفذة تجريبيًا؛ نشر النصوص منفذ بصلاحية إضافية، وينتظر اختبارًا حيًا |
 | Business Management API | إدارة الأصول | business_management وصلاحيات الأصل/العملية عند الحاجة | Business Portfolio وأدوار الأصول المناسبة | لا يخول تلقائيًا كل بيانات العملاء | دراسة فقط؛ تحديد الأصول المأذونة |
 | Catalog API | استعراض/إدارة كتالوج | catalog_management وbusiness_management لمسار اكتشاف كتالوجات الأعمال | كتالوج مملوك/مشارك وصلاحيات ومراجعة مناسبة | نشاط التجارة وسياسات المنتج؛ لا نفترض إدارة الطلبات | اكتشاف واختيار ومزامنة منتجات منفذة؛ يلزم كتالوج مأذون واختبار حي |
-| Lead Ads | استقبال واسترجاع leads | leads_retrieval وpages_show_list وpages_read_engagement وpages_manage_metadata وads_management لمسار وصلة | صلاحية leads وأصول العميل ومراجعة | بيانات شخصية، موافقات واحتفاظ وCRM mapping | OAuth وleadgen واسترجاع leads والمزامنة منفذة؛ يلزم صفحة ونموذج وصلاحيات حية |
+| Lead Ads | استقبال واسترجاع leads | leads_retrieval وpages_show_list وpages_read_engagement وpages_manage_metadata وads_management لمسار Labbily | صلاحية leads وأصول العميل ومراجعة | بيانات شخصية، موافقات واحتفاظ وCRM mapping | OAuth وleadgen واسترجاع leads والمزامنة منفذة؛ يلزم صفحة ونموذج وصلاحيات حية |
 | Marketing API / Insights | تقارير إعلانات ثم إدارة اختيارية | ads_read للتقارير؛ ads_management للإدارة؛ business_management حسب عملية الأصل | حساب إعلاني ومهامه ومستوى الوصول المناسب | لا تفعيل حملات أو إنفاق تلقائي؛ حدود مستقلة | OAuth وقراءة Insights منفذان دون إدارة إعلانات؛ يلزم حساب إعلاني واختبار حي |
 
 مراجع المصفوفة: [WhatsApp App Review](https://developers.facebook.com/docs/whatsapp/solution-providers/app-review/sample-submission/)، [Instagram Login](https://developers.facebook.com/docs/instagram/platform/instagram-api/changelog/)، [Messenger conversations](https://developers.facebook.com/docs/graph-api/reference/page/conversations/)، [Pages Webhooks](https://developers.facebook.com/docs/graph-api/webhooks/getting-started/webhooks-for-pages)، [Page reference](https://developers.facebook.com/docs/graph-api/reference/page/)، [Business asset management](https://developers.facebook.com/docs/business-management-apis/business-asset-management/overview)، [System user permissions](https://developers.facebook.com/docs/business-management-apis/system-users/install-apps-and-generate-tokens/). يجب الرجوع لعقد endpoint بعينه قبل كتابة موصل الخدمات المؤجلة.

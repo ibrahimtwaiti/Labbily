@@ -11,7 +11,7 @@ app=FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
 MAX_BYTES=2*1024*1024
 
 def scan_bytes(raw):
-    path=os.getenv('WASLA_CLAMD_SOCKET','/run/clamav/clamd.sock')
+    path=os.getenv('LABBILY_CLAMD_SOCKET','/run/clamav/clamd.sock')
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as sock:
         sock.settimeout(15);sock.connect(path);sock.sendall(b'zINSTREAM\0')
         for offset in range(0,len(raw),65536):
@@ -28,7 +28,7 @@ def scan_bytes(raw):
 
 @app.post('/scan')
 async def scan(request:Request):
-    token=os.getenv('WASLA_MEDIA_SCANNER_TOKEN','')
+    token=os.getenv('LABBILY_MEDIA_SCANNER_TOKEN','')
     if len(token)<32:raise HTTPException(503,'scanner_secret_not_configured')
     if not hmac.compare_digest(request.headers.get('authorization','').encode(),('Bearer '+token).encode()):raise HTTPException(401,'unauthorized')
     chunks=[];size=0

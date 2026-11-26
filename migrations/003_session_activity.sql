@@ -1,4 +1,4 @@
--- Wasla V1 security upgrade. Apply separately from request handling on production.
+-- Labbily V1 security upgrade. Apply separately from request handling on production.
 -- Existing legacy sessions without an activity record will be asked to log in again.
 CREATE TABLE IF NOT EXISTS session_activity (
     token_hash TEXT PRIMARY KEY REFERENCES sessions(token_hash) ON DELETE CASCADE,

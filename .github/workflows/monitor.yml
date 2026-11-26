@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: wasla-health
+  group: labbily-health
   cancel-in-progress: false
 jobs:
   smoke:
@@ -20,4 +20,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install httpx==0.28.1
-      - run: python -m scripts.smoke_production https://wasla-olive.vercel.app
+      - run: python -m scripts.smoke_production https://www.labbily.com

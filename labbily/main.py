@@ -28,16 +28,16 @@ REQUEST_STATES={'new','review','information','quoted','accepted','rejected','clo
 STAGES={'new','qualified','meeting','proposal','negotiation','won','lost'}
 
 def hosted_https():
-    return os.getenv('WASLA_ENV') in {'staging', 'production'} or os.getenv('VERCEL_ENV') in {'preview', 'production'}
+    return os.getenv('LABBILY_ENV') in {'staging', 'production'} or os.getenv('VERCEL_ENV') in {'preview', 'production'}
 
 @asynccontextmanager
 async def lifespan(app):
-    if hosted_https() and not os.getenv('WASLA_ORIGIN','').startswith('https://'):
-        raise RuntimeError('Hosted deployments require an explicit HTTPS WASLA_ORIGIN')
+    if hosted_https() and not os.getenv('LABBILY_ORIGIN','').startswith('https://'):
+        raise RuntimeError('Hosted deployments require an explicit HTTPS LABBILY_ORIGIN')
     initialize()
     yield
 
-app=FastAPI(title='Wasla API',version='2.0.0-rc.4',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+app=FastAPI(title='Labbily API',version='2.0.0-rc.4',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
 
 @app.middleware('http')
 async def protect(request, call_next):
@@ -45,7 +45,7 @@ async def protect(request, call_next):
         if len(await request.body())>(8*1024*1024 if request.url.path.startswith('/api/v2/tickets/') and request.url.path.endswith('/attachments') else 2200000 if request.url.path in ('/api/admin/brand','/api/v2/agent-knowledge/import') else 512000 if request.url.path.startswith('/api/v2/agents/') and request.method=='PUT' else 65536):
             return JSONResponse({'detail':'حجم الطلب أكبر من المسموح'},413)
         if not (request.url.path.startswith('/api/webhooks/') or request.url.path == '/api/internal/drain-webhooks'):
-            origin=('https://' + request.headers.get('host','') if os.getenv('VERCEL_ENV') in ('preview','production') else os.getenv('WASLA_ORIGIN','http://localhost:8000'))
+            origin=('https://' + request.headers.get('host','') if os.getenv('VERCEL_ENV') in ('preview','production') else os.getenv('LABBILY_ORIGIN','http://localhost:8000'))
             if request.headers.get('origin')!=origin:
                 return JSONResponse({'detail':'مصدر الطلب غير مسموح'},403)
             if 'application/json' not in request.headers.get('content-type',''):
@@ -98,7 +98,7 @@ SESSION_IDLE_SECONDS=30*60
 SESSION_ABSOLUTE_SECONDS=12*60*60
 
 async def user(request: Request):
-    token=request.cookies.get('wasla_session','')
+    token=request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))
     token_hash=digest(token)
     timestamp=int(time.time())
     with transaction() as db:
@@ -207,9 +207,9 @@ def first_provider(data:dict,request:Request):
     # Capability is random, expires, and is useless as soon as a provider exists.
     with transaction() as db:
         limit(db,'setup:'+digest(request.client.host),10,900)
-    expected=os.getenv('WASLA_SETUP_TOKEN','')
+    expected=os.getenv('LABBILY_SETUP_TOKEN','')
     supplied=data.get('token','')
-    try: expires=int(os.getenv('WASLA_SETUP_EXPIRES','0'))
+    try: expires=int(os.getenv('LABBILY_SETUP_EXPIRES','0'))
     except ValueError: expires=0
     if len(expected)<40 or not isinstance(supplied,str) or not hmac.compare_digest(supplied,expected) or time.time()>expires:
         raise HTTPException(403,'رابط التفعيل غير صالح أو انتهت صلاحيته')
@@ -246,7 +246,7 @@ def login(data:dict,request:Request,response:Response):
         db.execute('INSERT INTO sessions VALUES(?,?,?,?)',(digest(token),u['id'],csrf,timestamp+SESSION_ABSOLUTE_SECONDS))
         db.execute('INSERT INTO session_activity(token_hash,issued_at,last_seen_at) VALUES(?,?,?)',(digest(token),timestamp,timestamp))
         audit(db,u,'auth.login',u['id'])
-    response.set_cookie('wasla_session',token,max_age=SESSION_ABSOLUTE_SECONDS,httponly=True,secure=hosted_https(),samesite='strict',path='/')
+    response.set_cookie('labbily_session',token,max_age=SESSION_ABSOLUTE_SECONDS,httponly=True,secure=hosted_https(),samesite='strict',path='/')
     return {'ok':True}
 
 @app.get('/api/me')
@@ -255,8 +255,8 @@ def me(u=Depends(user)):
 
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,u=Depends(user)):
-    with transaction() as db: db.execute('DELETE FROM sessions WHERE token_hash=?',(digest(request.cookies.get('wasla_session','')),))
-    response.delete_cookie('wasla_session',path='/'); return {'ok':True}
+    with transaction() as db: db.execute('DELETE FROM sessions WHERE token_hash=?',(digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))),))
+    response.delete_cookie('wasla_session',path='/'); response.delete_cookie('labbily_session',path='/'); return {'ok':True}
 
 @app.post('/api/auth/password')
 def password(data:dict,u=Depends(user)):
@@ -477,7 +477,7 @@ def task_update(ident:str,data:dict,u=Depends(user)):
 def reports(u=Depends(user)):
     permit(u,'reports')
     with transaction() as db:
-        return {'timezone':'UTC','period':'all-time','source':'Wasla database',
+        return {'timezone':'UTC','period':'all-time','source':'Labbily database',
             'contacts':db.execute('SELECT count(*) FROM contacts WHERE tenant_id=?',(u['tenant_id'],)).fetchone()[0],
             'conversations':rows(db,'SELECT status,count(*) count FROM conversations WHERE tenant_id=? GROUP BY status',(u['tenant_id'],)),
             'pipeline':rows(db,'SELECT stage,currency,count(*) count,sum(value_minor) value_minor FROM opportunities WHERE tenant_id=? GROUP BY stage,currency',(u['tenant_id'],)),
@@ -569,7 +569,7 @@ def channel_create(data:dict,u=Depends(user)):
 
 @app.post('/api/internal/drain-webhooks')
 def drain_webhooks(request:Request):
-    secret=os.environ.get('WASLA_WORKER_SECRET','')
+    secret=os.environ.get('LABBILY_WORKER_SECRET','')
     if len(secret)<32 or not hmac.compare_digest(request.headers.get('Authorization',''),'Bearer '+secret):
         raise HTTPException(401,'Unauthorized')
     from .jobs import tick
@@ -597,12 +597,12 @@ async def receive_webhook(request:Request):
 
 @app.get('/robots.txt',response_class=PlainTextResponse)
 def robots():
-    origin=os.getenv('WASLA_ORIGIN','').rstrip('/')
+    origin=os.getenv('LABBILY_ORIGIN','').rstrip('/')
     return 'User-agent: *\nDisallow: /app\nDisallow: /api/\nDisallow: /setup\nDisallow: /login\n'+('Sitemap: '+origin+'/sitemap.xml\n' if origin.startswith('https://') else '')
 
 @app.get('/sitemap.xml')
 def sitemap(request:Request):
-    origin=(os.getenv('WASLA_ORIGIN') or str(request.base_url)).rstrip('/')
+    origin=(os.getenv('LABBILY_ORIGIN') or str(request.base_url)).rstrip('/')
     paths=['/','/services','/platform','/how-it-works','/about','/faq','/pricing','/request','/privacy','/terms']+['/services/'+s['id'] for s in SERVICES]
     urls=''.join('<url><loc>'+html.escape(origin+p+suffix)+'</loc></url>' for p in paths for suffix in ['', '?lang=en'])
     return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls+'</urlset>',media_type='application/xml')
@@ -617,9 +617,9 @@ app.mount('/static' ,StaticFiles(directory=STATIC),name='static')
 @app.get('/{path:path}')
 def shell(path:str,request:Request):
     if path.startswith('api/'): raise HTTPException(404,'المسار غير موجود')
-    lang=request.query_params.get('lang',request.cookies.get('wasla_lang','ar'))
+    lang=request.query_params.get('lang',request.cookies.get('labbily_lang',request.cookies.get('wasla_lang','ar')))
     en=lang=='en'; source=(STATIC/'index.html').read_text()
-    public_origin = (os.getenv('WASLA_ORIGIN') or str(request.base_url)).rstrip('/')
+    public_origin = (os.getenv('LABBILY_ORIGIN') or str(request.base_url)).rstrip('/')
     image_path = '/static/labbily/digital/dark/open-graph.png'
     source = source.replace(f'content="{image_path}"', f'content="{html.escape(public_origin, quote=True)}{image_path}"')
     if en:
@@ -636,7 +636,7 @@ def shell(path:str,request:Request):
             'Explore conversation management, automation and customer service solutions.' if en
             else 'استكشف حلول إدارة المحادثات والأتمتة وخدمة العملاء واختر ما يناسب فريقك.'
         )
-        origin = (os.getenv('WASLA_ORIGIN') or str(request.base_url)).rstrip('/')
+        origin = (os.getenv('LABBILY_ORIGIN') or str(request.base_url)).rstrip('/')
         canonical = html.escape(f"{origin}/{path}" + ("?lang=en" if en else ""), quote=True)
         title, description = html.escape(title), html.escape(description, quote=True)
         source = re.sub(r'<title>.*?</title>', f'<title>{title}</title>', source, count=1)

@@ -5,12 +5,12 @@ import unittest
 from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from fastapi.testclient import TestClient
-from wasla.main import app
+from labbily.main import app
 
 class SetupAcceptance(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
-        self.env=patch.dict(os.environ,{'WASLA_DB':self.tmp.name+'/setup.sqlite3','WASLA_ENV':'development','WASLA_ORIGIN':'http://testserver','WASLA_SETUP_TOKEN':'s'*48,'WASLA_SETUP_EXPIRES':str(int(time.time())+600)})
+        self.env=patch.dict(os.environ,{'LABBILY_DB':self.tmp.name+'/setup.sqlite3','LABBILY_ENV':'development','LABBILY_ORIGIN':'http://testserver','LABBILY_SETUP_TOKEN':'s'*48,'LABBILY_SETUP_EXPIRES':str(int(time.time())+600)})
         self.env.start();self.client=TestClient(app);self.client.__enter__();self.client.headers['Origin']='http://testserver'
         self.data={'token':'s'*48,'name':'Owner','email':'owner@example.test','password':'private-test-password','legal_entity':'QA Entity','contact_email':'contact@example.test'}
     def tearDown(self):
@@ -25,7 +25,7 @@ class SetupAcceptance(unittest.TestCase):
     def test_invalid_expired_and_missing_capability_fail(self):
         for value in ['',None,'wrong']:
             self.assertEqual(self.client.post('/api/auth/setup',json={**self.data,'token':value}).status_code,403)
-        with patch.dict(os.environ,{'WASLA_SETUP_EXPIRES':'1'}):
+        with patch.dict(os.environ,{'LABBILY_SETUP_EXPIRES':'1'}):
             self.assertEqual(self.client.post('/api/auth/setup',json=self.data).status_code,403)
     def test_origin_and_password_required(self):
         self.assertEqual(self.client.post('/api/auth/setup',json=self.data,headers={'Origin':'https://evil.test'}).status_code,403)

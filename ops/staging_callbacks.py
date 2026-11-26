@@ -1,4 +1,4 @@
-"""Public callback-only entry point for the independent Wasla Staging preview."""
+"""Public callback-only entry point for the independent Labbily Staging preview."""
 import os
 import re
 from urllib.parse import urlsplit
@@ -8,8 +8,8 @@ from fastapi.responses import HTMLResponse, Response
 from starlette.datastructures import MutableHeaders
 
 # Import the application once so its shared routers have completed registration.
-from wasla.main import meta_data, meta_lifecycle, privacy
-from wasla import service_api
+from labbily.main import meta_data, meta_lifecycle, privacy
+from labbily import service_api
 
 
 STAGING_HOST = 'ep-holy-breeze-b98rfxye.c-7.eu-central-1.aws.neon.tech'
@@ -18,11 +18,11 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, redirect_slashes=
 
 def staging_bound():
     db = urlsplit(os.getenv('DATABASE_URL', ''))
-    return (os.getenv('WASLA_ENV') == 'staging'
+    return (os.getenv('LABBILY_ENV') == 'staging'
             and os.getenv('VERCEL_ENV') == 'preview'
             and db.scheme in {'postgres', 'postgresql'}
             and db.hostname in {STAGING_HOST, STAGING_HOST.replace('.c-7.', '-pooler.c-7.')}
-            and db.path == '/wasla_staging')
+            and db.path == '/labbily_staging')
 
 
 class CallbackBoundary:
@@ -80,5 +80,5 @@ def deletion_status(request: str = ''):
     labels = {'completed': 'اكتمل الحذف', 'blocked_hold': 'الطلب قيد مراجعة الاحتفاظ',
               'failed': 'يتطلب الطلب مراجعة', 'retry': 'ستعاد محاولة معالجة الطلب'}
     message = labels.get(state, 'الطلب قيد المعالجة')
-    page = '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><title>وصلة | حالة الحذف</title><main><h1>حالة طلب الحذف</h1><p>'+message+'</p></main></html>'
+    page = '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><title>Labbily | حالة الحذف</title><main><h1>حالة طلب الحذف</h1><p>'+message+'</p></main></html>'
     return HTMLResponse(page, headers={'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"})

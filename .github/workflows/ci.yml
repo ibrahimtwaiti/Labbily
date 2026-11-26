@@ -1,4 +1,4 @@
-name: Wasla checks
+name: Labbily checks
 on:
   push:
   pull_request:
@@ -17,22 +17,22 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -r requirements.txt -r scripts/requirements-restore.txt
-      - run: python -m compileall -q wasla scripts
-      - run: node --check wasla/static/app.js
-      - run: node --check wasla/static/service.js
-      - run: node --check wasla/static/provider-console.js
-      - run: node --check wasla/static/service-oauth.js
-      - run: node --check wasla/static/completion.js
-      - run: node --check wasla/static/meta-data.js
-      - run: node --check wasla/static/commerce.js
-      - run: node --check wasla/static/meta-integrations.js
+      - run: python -m compileall -q labbily scripts
+      - run: node --check labbily/static/app.js
+      - run: node --check labbily/static/service.js
+      - run: node --check labbily/static/provider-console.js
+      - run: node --check labbily/static/service-oauth.js
+      - run: node --check labbily/static/completion.js
+      - run: node --check labbily/static/meta-data.js
+      - run: node --check labbily/static/commerce.js
+      - run: node --check labbily/static/meta-integrations.js
       - run: python -m unittest discover -s tests -v
       - name: Synthetic V2 load and duplicate-delivery integrity
-        run: python -m scripts.benchmark_service --messages 1000 --workers 4 --output /tmp/wasla-v2-benchmark.json
+        run: python -m scripts.benchmark_service --messages 1000 --workers 4 --output /tmp/labbily-v2-benchmark.json
       - uses: actions/upload-artifact@v4
         with:
           name: synthetic-v2-benchmark
-          path: /tmp/wasla-v2-benchmark.json
+          path: /tmp/labbily-v2-benchmark.json
 
   postgres:
     runs-on: ubuntu-latest
@@ -40,13 +40,13 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: wasla_test
-          POSTGRES_USER: wasla_test
+          POSTGRES_DB: labbily_test
+          POSTGRES_USER: labbily_test
           POSTGRES_PASSWORD: ci-disposable-only
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U wasla_test -d wasla_test"
+          --health-cmd="pg_isready -U labbily_test -d labbily_test"
           --health-interval=5s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v4
@@ -57,34 +57,34 @@ jobs:
       - run: python -m pip install -r requirements.txt -r scripts/requirements-restore.txt
       - name: Migrations, PostgreSQL acceptance, isolation and concurrent worker
         env:
-          DATABASE_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
-          DATABASE_URL_UNPOOLED: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
-          WASLA_TEST_DATABASE_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
+          DATABASE_URL: postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_test
+          DATABASE_URL_UNPOOLED: postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_test
+          LABBILY_TEST_DATABASE_URL: postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_test
         run: |
-          python -m wasla.cli init
+          python -m labbily.cli init
           python -m unittest discover -s tests -p 'test_postgres.py' -v
 
       - name: Restore V2 backup into a disposable database and compare every row
         env:
           PG_CONTAINER: ${{ job.services.postgres.id }}
           PGPASSWORD: ci-disposable-only
-          WASLA_TEST_DATABASE_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_test
-          WASLA_RESTORE_TEST_URL: postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_restore_test
+          LABBILY_TEST_DATABASE_URL: postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_test
+          LABBILY_RESTORE_TEST_URL: postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_restore_test
         run: |
-          psql -h localhost -U wasla_test -d wasla_test -c 'CREATE DATABASE wasla_restore_test;'
-          docker exec ${{ job.services.postgres.id }} pg_dump -U wasla_test -d wasla_test -Fc > /tmp/wasla-ci-restore.dump
+          psql -h localhost -U labbily_test -d labbily_test -c 'CREATE DATABASE labbily_restore_test;'
+          docker exec ${{ job.services.postgres.id }} pg_dump -U labbily_test -d labbily_test -Fc > /tmp/labbily-ci-restore.dump
           # Extract with the same client major as the source, execute with the runner's psql.
-          docker cp /tmp/wasla-ci-restore.dump "$PG_CONTAINER":/tmp/wasla-ci-restore.dump
+          docker cp /tmp/labbily-ci-restore.dump "$PG_CONTAINER":/tmp/labbily-ci-restore.dump
           mkdir -p "$RUNNER_TEMP/restore-bin"
           cat >"$RUNNER_TEMP/restore-bin/pg_restore" <<'SH'
           #!/bin/sh
           exec docker exec "$PG_CONTAINER" pg_restore "$@"
           SH
           chmod +x "$RUNNER_TEMP/restore-bin/pg_restore"
-          export PATH="$RUNNER_TEMP/restore-bin:$PATH" PGHOST=127.0.0.1 PGUSER=wasla_test PGDATABASE=wasla_restore_test
-          python -m scripts.restore_postgres /tmp/wasla-ci-restore.dump
+          export PATH="$RUNNER_TEMP/restore-bin:$PATH" PGHOST=127.0.0.1 PGUSER=labbily_test PGDATABASE=labbily_restore_test
+          python -m scripts.restore_postgres /tmp/labbily-ci-restore.dump
           python -m scripts.verify_restore
-          if python -m scripts.restore_postgres /tmp/wasla-ci-restore.dump; then
+          if python -m scripts.restore_postgres /tmp/labbily-ci-restore.dump; then
             echo 'Restore accepted an occupied target' >&2
             exit 1
           fi
@@ -94,22 +94,22 @@ jobs:
         env:
           PGPASSWORD: ci-disposable-only
         run: |
-          psql -h localhost -U wasla_test -d wasla_test -c 'CREATE DATABASE wasla_import_test;'
+          psql -h localhost -U labbily_test -d labbily_test -c 'CREATE DATABASE labbily_import_test;'
           python - <<'PY'
           import os
           os.environ.pop('DATABASE_URL', None)
-          os.environ['WASLA_DB'] = '/tmp/wasla-import-source.sqlite3'
-          from wasla.db import initialize, transaction, now
+          os.environ['LABBILY_DB'] = '/tmp/labbily-import-source.sqlite3'
+          from labbily.db import initialize, transaction, now
           initialize()
           with transaction() as db:
               db.execute('INSERT INTO tenants(id,name,created_at) VALUES(?,?,?)',('import-tenant','Import CI',now()))
           PY
-          DATABASE_URL=postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_import_test \
-          DATABASE_URL_UNPOOLED=postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_import_test \
-          python -m wasla.cli init
-          DATABASE_URL_UNPOOLED=postgresql://wasla_test:ci-disposable-only@localhost:5432/wasla_import_test \
-          python -m scripts.import_sqlite_to_postgres --source /tmp/wasla-import-source.sqlite3 --target-database wasla_import_test --apply
-          count="$(psql -h localhost -U wasla_test -d wasla_import_test -At -c 'SELECT count(*) FROM tenants;')"
+          DATABASE_URL=postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_import_test \
+          DATABASE_URL_UNPOOLED=postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_import_test \
+          python -m labbily.cli init
+          DATABASE_URL_UNPOOLED=postgresql://labbily_test:ci-disposable-only@localhost:5432/labbily_import_test \
+          python -m scripts.import_sqlite_to_postgres --source /tmp/labbily-import-source.sqlite3 --target-database labbily_import_test --apply
+          count="$(psql -h localhost -U labbily_test -d labbily_import_test -At -c 'SELECT count(*) FROM tenants;')"
           test "$count" = 1
 
   browser:

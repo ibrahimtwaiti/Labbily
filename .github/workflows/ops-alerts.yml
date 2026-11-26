@@ -1,4 +1,4 @@
-name: Wasla operational alerts
+name: Labbily operational alerts
 on:
   workflow_run:
     workflows:
@@ -19,7 +19,7 @@ permissions:
   actions: read
   issues: write
 concurrency:
-  group: wasla-operational-alerts
+  group: labbily-operational-alerts
   cancel-in-progress: false
 jobs:
   notify:

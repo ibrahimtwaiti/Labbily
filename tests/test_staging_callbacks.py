@@ -21,15 +21,15 @@ class StagingCallbackAcceptance(unittest.TestCase):
     tearDown = base.Acceptance.tearDown
 
     def test_binding_and_private_routes(self):
-        source = 'postgresql://qa@' + callbacks.STAGING_HOST + '/wasla_staging'
-        with patch.dict(os.environ, DATABASE_URL=source, WASLA_ENV='staging', VERCEL_ENV='preview'):
+        source = 'postgresql://qa@' + callbacks.STAGING_HOST + '/labbily_staging'
+        with patch.dict(os.environ, DATABASE_URL=source, LABBILY_ENV='staging', VERCEL_ENV='preview'):
             self.assertTrue(callbacks.staging_bound())
             for path in ('/app', '/api/me', '/setup', '/api/auth/register', '/api/internal/drain-webhooks',
                          '/api/admin/privacy/deletions', '/docs', '/static/app.js'):
                 self.assertEqual(self.gateway.get(path).status_code, 404)
             with patch.dict(os.environ, VERCEL_ENV='production'):
                 self.assertEqual(self.gateway.get('/api/webhooks/v2/whatsapp').status_code, 503)
-            with patch.dict(os.environ, DATABASE_URL='postgresql://qa@localhost/wasla_staging'):
+            with patch.dict(os.environ, DATABASE_URL='postgresql://qa@localhost/labbily_staging'):
                 self.assertFalse(callbacks.staging_bound())
 
     def test_challenge_signed_delivery_and_size_limit(self):
@@ -49,7 +49,7 @@ class StagingCallbackAcceptance(unittest.TestCase):
     def test_signed_deletion_returns_public_private_status(self):
         origin = 'https://hooks.example.invalid'
         with patch.object(callbacks, 'staging_bound', return_value=True), patch.dict(
-                os.environ, WASLA_DELETION_STATUS_ORIGIN=origin, META_APP_ID='123'):
+                os.environ, LABBILY_DELETION_STATUS_ORIGIN=origin, META_APP_ID='123'):
             def encode(data):
                 return base64.urlsafe_b64encode(data).rstrip(b'=')
             body = json.dumps({'user_id': '123', 'algorithm': 'HMAC-SHA256', 'issued_at': int(time.time())})

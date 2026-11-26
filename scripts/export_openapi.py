@@ -1,8 +1,8 @@
 """Deterministic documentation export; contains no environment values or data."""
 import json
 from pathlib import Path
-from wasla.main import app
-from wasla.api_docs import schema
+from labbily.main import app
+from labbily.api_docs import schema
 
 def main():
     path=Path(__file__).resolve().parent.parent/'docs/openapi.json'

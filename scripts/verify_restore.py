@@ -13,7 +13,7 @@ def fingerprint(conn,table):
     return len(data),hashlib.sha256('\n'.join(sorted(r[0] for r in data)).encode()).hexdigest()
 
 def main():
-    source=os.environ['WASLA_TEST_DATABASE_URL'];target=os.environ['WASLA_RESTORE_TEST_URL']
+    source=os.environ['LABBILY_TEST_DATABASE_URL'];target=os.environ['LABBILY_RESTORE_TEST_URL']
     if source==target:raise SystemExit('Source and restore target must differ')
     with psycopg.connect(source) as a,psycopg.connect(target) as b:
         tables=[r[0] for r in a.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename")]

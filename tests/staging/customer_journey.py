@@ -1,4 +1,4 @@
-"""Opt-in drill against the dedicated protected Wasla preview, with a loopback SMTP inbox.
+"""Opt-in drill against the dedicated protected Labbily preview, with a loopback SMTP inbox.
 
 Run as a module from the repository with the extra test dependency aiosmtpd==1.4.6.
 The runner needs a temporary trusted localhost TLS certificate and dedicated staging secrets.
@@ -22,11 +22,11 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import AuthResult
 import browser_journey
 from staging_database import exclusive_drill
-from wasla import email_verification, privacy
-from wasla.db import one, now, transaction, uid
-from wasla.service_oauth import cipher
+from labbily import email_verification, privacy
+from labbily.db import one, now, transaction, uid
+from labbily.service_oauth import cipher
 
-ORIGIN = 'https://wasla-git-feat-meta-provider-readiness-al-habib-center.vercel.app'
+ORIGIN = 'https://labbily-git-feat-meta-provider-readiness-al-habib-center.vercel.app'
 DATABASE_HOST = 'ep-holy-breeze-b98rfxye.c-7.eu-central-1.aws.neon.tech'
 MAIL_PORT = 18025
 
@@ -35,13 +35,13 @@ def guard():
     uri = urlsplit(os.environ['DATABASE_URL'])
     grant = urlsplit(os.environ['STAGING_ACCESS_URL'])
     if (
-        os.environ.get('WASLA_ENV') != 'staging'
-        or os.environ.get('WASLA_ORIGIN') != ORIGIN
+        os.environ.get('LABBILY_ENV') != 'staging'
+        or os.environ.get('LABBILY_ORIGIN') != ORIGIN
         or grant.scheme != 'https'
         or grant.netloc != urlsplit(ORIGIN).netloc
         or uri.hostname != DATABASE_HOST
-        or uri.path != '/wasla_staging'
-        or os.environ.get('WASLA_MEDIA_BUCKET') != 'wasla-v2-staging-media'
+        or uri.path != '/labbily_staging'
+        or os.environ.get('LABBILY_MEDIA_BUCKET') != 'labbily-v2-staging-media'
     ):
         raise RuntimeError('Dedicated staging bindings required')
     with transaction() as db:
@@ -49,7 +49,7 @@ def guard():
             'SELECT EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM tenants) OR EXISTS (SELECT 1 FROM service_accounts)'
         ).fetchone()[0]:
             raise RuntimeError('Run only against an empty staging workspace inventory')
-        if db.execute('SELECT current_database()').fetchone()[0] != 'wasla_staging':
+        if db.execute('SELECT current_database()').fetchone()[0] != 'labbily_staging':
             raise RuntimeError('Unexpected staging database')
 
 
@@ -110,7 +110,7 @@ def drill():
     tls.load_cert_chain(os.environ['STAGING_TLS_CERT'], os.environ['STAGING_TLS_KEY'])
 
     def authenticate(server, session, envelope, mechanism, auth):
-        valid = getattr(auth, 'login', b'') == b'wasla-drill' and hmac.compare_digest(
+        valid = getattr(auth, 'login', b'') == b'labbily-drill' and hmac.compare_digest(
             getattr(auth, 'password', b''), mail_password.encode()
         )
         return AuthResult(success=valid, handled=False)
@@ -125,18 +125,18 @@ def drill():
         authenticator=authenticate,
     )
     values = {
-        'WASLA_SELF_SIGNUP_MODE': 'test',
-        'WASLA_EMAIL_MODE': 'smtp',
-        'WASLA_EMAIL_ORIGIN': ORIGIN,
-        'WASLA_SMTP_HOST': 'localhost',
-        'WASLA_SMTP_PORT': str(MAIL_PORT),
-        'WASLA_SMTP_USER': 'wasla-drill',
-        'WASLA_SMTP_PASSWORD': mail_password,
-        'WASLA_SMTP_FROM': 'verification@example.invalid',
+        'LABBILY_SELF_SIGNUP_MODE': 'test',
+        'LABBILY_EMAIL_MODE': 'smtp',
+        'LABBILY_EMAIL_ORIGIN': ORIGIN,
+        'LABBILY_SMTP_HOST': 'localhost',
+        'LABBILY_SMTP_PORT': str(MAIL_PORT),
+        'LABBILY_SMTP_USER': 'labbily-drill',
+        'LABBILY_SMTP_PASSWORD': mail_password,
+        'LABBILY_SMTP_FROM': 'verification@example.invalid',
         'META_VERIFY_TOKEN': verify_secret,
         'META_APP_SECRET': signing_secret,
-        'WASLA_MEDIA_SCANNER_URL': os.environ['STAGING_SCANNER_URL'],
-        'WASLA_MEDIA_SCANNER_TOKEN': os.environ['STAGING_SCANNER_TOKEN'],
+        'LABBILY_MEDIA_SCANNER_URL': os.environ['STAGING_SCANNER_URL'],
+        'LABBILY_MEDIA_SCANNER_TOKEN': os.environ['STAGING_SCANNER_TOKEN'],
     }
     smtp.start()
     try:
@@ -239,7 +239,7 @@ def drill():
             endpoint = '/api/webhooks/v2/whatsapp'
             q = {
                 'hub.mode': 'subscribe',
-                'hub.challenge': 'wasla-staging-challenge',
+                'hub.challenge': 'labbily-staging-challenge',
                 'hub.verify_token': verify_secret,
             }
             expect(
@@ -251,7 +251,7 @@ def drill():
                 'from': '15550100000',
                 'timestamp': str(int(time.time())),
                 'type': 'text',
-                'text': {'body': 'Wasla staging message'},
+                'text': {'body': 'Labbily staging message'},
             }
             raw = json.dumps(
                 {
@@ -287,7 +287,7 @@ def drill():
                     content=raw,
                     headers={'Content-Type': 'application/json', 'X-Hub-Signature-256': sig},
                 )
-            worker_headers = {'Authorization': 'Bearer ' + os.environ['WASLA_WORKER_SECRET']}
+            worker_headers = {'Authorization': 'Bearer ' + os.environ['LABBILY_WORKER_SECRET']}
             request(http, 'POST', '/api/internal/drain-webhooks', headers=worker_headers, json={})
             tickets = request(http, 'GET', '/api/v2/tickets').json()
             expect(len(tickets) == 1, 'signed delivery and duplicate produced one ticket')
@@ -301,7 +301,7 @@ def drill():
             request(http, 'GET', '/api/v2/reports')
             media = {
                 'mime_type': 'application/pdf',
-                'base64': base64.b64encode(b'%PDF-1.4\n% Wasla staging fixture\n%%EOF').decode(),
+                'base64': base64.b64encode(b'%PDF-1.4\n% Labbily staging fixture\n%%EOF').decode(),
             }
             attachment = request(http, 'POST', path + '/attachments', 201, json=media).json()
             expect(
@@ -332,7 +332,7 @@ def drill():
                 json={
                     'days': 30,
                     'enabled': True,
-                    'evidence': 'Disposable Wasla QA retention drill',
+                    'evidence': 'Disposable Labbily QA retention drill',
                 },
             )
             request(http, 'POST', path + '/hold', json={'reason': 'Synthetic retention review'})

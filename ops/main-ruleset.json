@@ -1,5 +1,5 @@
 {
-  "name": "Wasla main release gates",
+  "name": "Labbily main release gates",
   "target": "branch",
   "enforcement": "active",
   "bypass_actors": [],

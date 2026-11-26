@@ -1,8 +1,8 @@
 import unittest
 import test_acceptance as base
 import test_service_v2 as fixtures
-from wasla.db import transaction
-from wasla.service_health import queue_health
+from labbily.db import transaction
+from labbily.service_health import queue_health
 
 class QueueHealth(unittest.TestCase):
     setUp=base.Acceptance.setUp

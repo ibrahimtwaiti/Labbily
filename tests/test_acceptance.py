@@ -11,10 +11,10 @@ from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from wasla.main import app
-from wasla.db import initialize, transaction, now, uid, path
-from wasla.security import hash_password
-from wasla.worker import process_one
+from labbily.main import app
+from labbily.db import initialize, transaction, now, uid, path
+from labbily.security import hash_password
+from labbily.worker import process_one
 from scripts.retention_cleanup import execute as apply_retention
 
 PASSWORD='test-only-long-password'
@@ -24,7 +24,7 @@ class Acceptance(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.environment=dict(os.environ)
-        os.environ.update(WASLA_DB=self.temp.name+'/test.sqlite3',WASLA_ENV='development',WASLA_ORIGIN='http://localhost:8000',META_APP_SECRET='test-webhook-secret',META_VERIFY_TOKEN='test-verify')
+        os.environ.update(LABBILY_DB=self.temp.name+'/test.sqlite3',LABBILY_ENV='development',LABBILY_ORIGIN='http://localhost:8000',META_APP_SECRET='test-webhook-secret',META_VERIFY_TOKEN='test-verify')
         initialize()
         with transaction() as db:
             for tid in ['a','b']: db.execute('INSERT INTO tenants(id,name,created_at) VALUES(?,?,?)',(tid,'Company '+tid,now()))
@@ -178,7 +178,7 @@ class Acceptance(unittest.TestCase):
         self.assertGreater(activity,int(time.time())-10)
 
     def test_login_cookie_and_logout(self):
-        self.login();self.assertIn('wasla_session',self.client.cookies)
+        self.login();self.assertIn('labbily_session',self.client.cookies)
         self.assertEqual(self.post('/auth/logout',{}).status_code,200)
         self.assertEqual(self.client.get('/api/me').status_code,401)
     def test_bad_password_is_generic(self):
@@ -296,7 +296,7 @@ class Acceptance(unittest.TestCase):
         self.assertEqual(self.patch('/tasks/'+r.json()['id'],{'status':'done'}).status_code,200)
     def test_site_content_provider_only(self):
         self.login();self.assertEqual(self.client.put('/api/admin/content',json={'key':'about','value':'text'}).status_code,403)
-        self.login('provider');self.assertEqual(self.client.put('/api/admin/content',json={'key':'about','value':'وصلة'}).status_code,200)
-        self.assertEqual(self.client.get('/api/catalog').json()['content']['about'],'وصلة')
+        self.login('provider');self.assertEqual(self.client.put('/api/admin/content',json={'key':'about','value':'Labbily'}).status_code,200)
+        self.assertEqual(self.client.get('/api/catalog').json()['content']['about'],'Labbily')
 
 if __name__=='__main__':unittest.main()

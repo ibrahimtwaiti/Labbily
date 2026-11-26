@@ -6,20 +6,20 @@ from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
-from wasla.db import initialize, now, uid, transaction, postgres
-from wasla.main import app
-from wasla.security import hash_password
-from wasla.worker import process_one
+from labbily.db import initialize, now, uid, transaction, postgres
+from labbily.main import app
+from labbily.security import hash_password
+from labbily.worker import process_one
 
-TEST_URL=os.getenv('WASLA_TEST_DATABASE_URL')
+TEST_URL=os.getenv('LABBILY_TEST_DATABASE_URL')
 
-@unittest.skipUnless(TEST_URL,'Needs disposable PostgreSQL WASLA_TEST_DATABASE_URL')
+@unittest.skipUnless(TEST_URL,'Needs disposable PostgreSQL LABBILY_TEST_DATABASE_URL')
 class PostgreSQLAcceptance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.old=dict(os.environ)
-        os.environ.update(DATABASE_URL=TEST_URL,WASLA_ENV='development',
-                          WASLA_ORIGIN='http://localhost:8000')
+        os.environ.update(DATABASE_URL=TEST_URL,LABBILY_ENV='development',
+                          LABBILY_ORIGIN='http://localhost:8000')
         initialize()
         cls.a=uid(); cls.b=uid()
         cls.email_a='a-'+uid()+'@example.test'
@@ -37,7 +37,7 @@ class PostgreSQLAcceptance(unittest.TestCase):
     def tearDownClass(cls):
         os.environ.clear(); os.environ.update(cls.old)
     def test_agent_usage_cap_with_concurrent_workers(self):
-        from wasla.agent_engine import month, reserve
+        from labbily.agent_engine import month, reserve
         def attempt(_):
             with transaction() as db:
                 return reserve(db,self.a,3)
@@ -97,7 +97,7 @@ class PostgreSQLAcceptance(unittest.TestCase):
     def test_first_provider_concurrent_activation(self):
         from unittest.mock import patch
         from time import time
-        with patch.dict(os.environ,{'WASLA_SETUP_TOKEN':'p'*48,'WASLA_SETUP_EXPIRES':str(int(time())+600)}):
+        with patch.dict(os.environ,{'LABBILY_SETUP_TOKEN':'p'*48,'LABBILY_SETUP_EXPIRES':str(int(time())+600)}):
             data={'token':'p'*48,'name':'PG Owner','email':'pg-owner@example.test','password':self.password,'legal_entity':'PG Test','contact_email':'public@example.test'}
             def activate(_):
                 with TestClient(app) as client:
@@ -106,8 +106,8 @@ class PostgreSQLAcceptance(unittest.TestCase):
             self.assertEqual(sorted(codes),[201,409])
 
     def test_v2_durable_inbound_and_outbox_concurrency(self):
-        from wasla import service
-        from wasla.db import one
+        from labbily import service
+        from labbily.db import one
         from unittest.mock import patch
         import httpx,time
         aid=uid();asset=uid()
@@ -122,19 +122,19 @@ class PostgreSQLAcceptance(unittest.TestCase):
         with TestClient(app) as client:
             client.headers['Origin']='http://localhost:8000'
             client.post('/api/auth/login',json={'email':self.email_a,'password':self.password});client.headers['X-CSRF-Token']=client.get('/api/me').json()['csrf']
-            with patch.dict(os.environ,{'WASLA_CHANNEL_'+aid.upper()+'_TOKEN':'test-only'}):
+            with patch.dict(os.environ,{'LABBILY_CHANNEL_'+aid.upper()+'_TOKEN':'test-only'}):
                 queued=client.post('/api/v2/tickets/'+ticket['id']+'/messages',json={'direction':'out','body':'test reply','version':ticket['version']},headers={'Idempotency-Key':uid()});self.assertEqual(queued.status_code,201,queued.text)
-                with patch('wasla.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'pg-out-'+uid()}]})) as provider:
+                with patch('labbily.service.provider_request',return_value=httpx.Response(200,json={'messages':[{'id':'pg-out-'+uid()}]})) as provider:
                     with ThreadPoolExecutor(2) as pool:list(pool.map(lambda _:service.send_outbox(),range(2)))
                     provider.assert_called_once()
         # Media claims use SKIP LOCKED and one clean object per message.
-        from wasla.service_media import process_media
+        from labbily.service_media import process_media
         from unittest.mock import MagicMock
         with transaction() as db:
             message=one(db,"SELECT id FROM service_messages WHERE ticket_id=? AND direction='in'",(ticket['id'],))
             db.execute('INSERT INTO service_media_jobs(id,tenant_id,message_id,account_id,descriptor) VALUES(?,?,?,?,?)',(uid(),self.a,message['id'],aid,'{"id":"777"}'))
         storage=MagicMock()
-        with patch.dict(os.environ,{'WASLA_MEDIA_BUCKET':'test'}),patch('wasla.service_media.client',return_value=storage),patch('wasla.service_media.fetch_provider_media',return_value=(b'fixture','image/png')),patch('wasla.service_media.scan',return_value='testhash'):
+        with patch.dict(os.environ,{'LABBILY_MEDIA_BUCKET':'test'}),patch('labbily.service_media.client',return_value=storage),patch('labbily.service_media.fetch_provider_media',return_value=(b'fixture','image/png')),patch('labbily.service_media.scan',return_value='testhash'):
             with ThreadPoolExecutor(2) as pool:results=list(pool.map(lambda _:process_media(),range(2)))
             self.assertEqual(sorted(results),[False,True]);storage.put_object.assert_called_once()
         with transaction() as db:
@@ -143,9 +143,9 @@ class PostgreSQLAcceptance(unittest.TestCase):
             db.execute('INSERT INTO service_channel_snapshots VALUES(?,?,?,?,?)',(aid,self.a,'{}','{}',now()))
 
     def test_saas_quota_concurrent_and_grant_tenant_fk(self):
-        from wasla.saas import consume_message
+        from labbily.saas import consume_message
         from fastapi import HTTPException
-        from wasla.db import one
+        from labbily.db import one
         import psycopg
         plan=uid();aid=uid()
         with transaction() as db:
@@ -162,7 +162,7 @@ class PostgreSQLAcceptance(unittest.TestCase):
             with transaction() as db:db.execute('INSERT INTO meta_grants VALUES(?,?,?,?,NULL,?)',(aid,self.b,'123','hash','unchecked'))
 
     def test_rate_limit_is_atomic_under_concurrency(self):
-        from wasla.security import limit
+        from labbily.security import limit
         from fastapi import HTTPException
         key='pg-rate-'+uid()
         def attempt(_):
@@ -174,11 +174,11 @@ class PostgreSQLAcceptance(unittest.TestCase):
         self.assertEqual(results.count(200),5);self.assertEqual(results.count(429),15)
         with transaction() as db:self.assertEqual(db.execute('SELECT count FROM rate_limits WHERE key=?',(key,)).fetchone()[0],5)
 
-@unittest.skipUnless(TEST_URL,'Needs disposable PostgreSQL WASLA_TEST_DATABASE_URL')
+@unittest.skipUnless(TEST_URL,'Needs disposable PostgreSQL LABBILY_TEST_DATABASE_URL')
 class PostgreSQLCompletion(unittest.TestCase):
     def setUp(self):
         from cryptography.fernet import Fernet
-        self.old=dict(os.environ);os.environ.update(DATABASE_URL=TEST_URL,WASLA_ENV='development',WASLA_ORIGIN='http://localhost:8000',WASLA_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),WASLA_EMAIL_MODE='local')
+        self.old=dict(os.environ);os.environ.update(DATABASE_URL=TEST_URL,LABBILY_ENV='development',LABBILY_ORIGIN='http://localhost:8000',LABBILY_TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),LABBILY_EMAIL_MODE='local')
         initialize();self.tid=uid();self.user=uid()
         with transaction() as db:
             db.execute('INSERT INTO tenants(id,name,created_at) VALUES(?,?,?)',(self.tid,'Completion PG',now()))
@@ -194,7 +194,7 @@ class PostgreSQLCompletion(unittest.TestCase):
             with transaction() as db:db.execute('INSERT INTO meta_data_records VALUES(?,?,?,?,?,?)',(aid,uid(),'1','products','encrypted',1))
     def test_concurrent_seat_and_api_reservations(self):
         from fastapi import HTTPException
-        from wasla.entitlements import capacity,consume_api
+        from labbily.entitlements import capacity,consume_api
         with transaction() as db:
             plan=uid();db.execute('INSERT INTO service_plans VALUES(?,?,?,?,?,1,?)',(plan,'Concurrent','SAR',0,10,now()))
             db.execute('INSERT INTO service_subscriptions VALUES(?,?,?,?,?)',(self.tid,plan,json.dumps({'message_limit':10,'limits':{'seats':2,'api_requests':1}}),'trial',now()))
@@ -218,12 +218,12 @@ class PostgreSQLCompletion(unittest.TestCase):
             self.assertEqual((row['arg'],row['pattern'],row['remainder']),('50%','stage%',1))
             self.assertEqual(db.execute("SELECT 'restore:%'").fetchone()[0],'restore:%')
         from scripts.deletion_ledger import export_ledger
-        self.assertEqual(export_ledger()['format'],'wasla-erasure-ledger-v1')
+        self.assertEqual(export_ledger()['format'],'labbily-erasure-ledger-v1')
 
     def test_email_verification_single_use_under_concurrency(self):
-        from wasla.email_verification import enqueue
-        from wasla.service_oauth import cipher
-        from wasla.db import one
+        from labbily.email_verification import enqueue
+        from labbily.service_oauth import cipher
+        from labbily.db import one
         with transaction() as db:
             db.execute('UPDATE users SET active=0 WHERE id=?',(self.user,))
             db.execute("INSERT INTO service_registrations VALUES(?,?,'pending','sandbox-v1','',?)",(self.tid,self.user,now()))
@@ -233,9 +233,9 @@ class PostgreSQLCompletion(unittest.TestCase):
             with TestClient(app) as client:return client.post('/api/auth/verification/complete',json={'token':token},headers={'Origin':'http://localhost:8000'}).status_code
         with ThreadPoolExecutor(4) as pool:self.assertEqual(sorted(pool.map(verify,range(4))),[200,409,409,409])
     def test_lead_dedup_and_exclusive_worker(self):
-        from wasla import meta_data
-        from wasla.db import one
-        from wasla.service_oauth import cipher
+        from labbily import meta_data
+        from labbily.db import one
+        from labbily.service_oauth import cipher
         from unittest.mock import patch
         import time
         aid=uid();pageid=str(int(uuid4().hex[:10],16));leadid='123456';credential=cipher().encrypt(b'pg-only-token').decode()
@@ -246,13 +246,13 @@ class PostgreSQLCompletion(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM meta_lead_events WHERE connection_id=?',(aid,)).fetchone()[0],1)
             account=one(db,'SELECT * FROM meta_data_connections WHERE id=?',(aid,))
         def fetch(*args,**kwargs):time.sleep(.1);return {'id':leadid,'field_data':[]}
-        with patch('wasla.meta_data.connection',return_value=(account,'pg-only-token')),patch('wasla.meta_data.graph',side_effect=fetch) as graph:
+        with patch('labbily.meta_data.connection',return_value=(account,'pg-only-token')),patch('labbily.meta_data.graph',side_effect=fetch) as graph:
             with ThreadPoolExecutor(2) as pool:list(pool.map(lambda _:meta_data.process_lead(),range(2)))
             graph.assert_called_once()
         with transaction() as db:self.assertEqual(db.execute('SELECT count(*) FROM meta_data_records WHERE connection_id=?',(aid,)).fetchone()[0],1)
     def test_complete_erasure_with_all_completion_foreign_keys(self):
-        from wasla import privacy,email_verification
-        from wasla.db import one
+        from labbily import privacy,email_verification
+        from labbily.db import one
         aid=uid()
         with transaction() as db:
             email_verification.enqueue(db,self.user)
@@ -268,7 +268,7 @@ class PostgreSQLCompletion(unittest.TestCase):
             self.assertIsNone(one(db,'SELECT id FROM users WHERE id=?',(self.user,)))
     def test_page_ownership_is_atomic_across_messenger_and_leads(self):
         from fastapi import HTTPException
-        from wasla.entitlements import page_ownership
+        from labbily.entitlements import page_ownership
         page_id=str(int(uuid4().hex[:10],16));other=uid()
         with transaction() as db:db.execute('INSERT INTO tenants(id,name,created_at) VALUES(?,?,?)',(other,'Other PG',now()))
         def connect(kind):

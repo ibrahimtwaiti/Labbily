@@ -41,7 +41,7 @@ def token(account):
     if account.get('token_ref','').startswith('vault:'):
         from .service_oauth import read_token
         return read_token(account)
-    return os.getenv('WASLA_CHANNEL_'+account['id'].upper()+'_TOKEN', '')
+    return os.getenv('LABBILY_CHANNEL_'+account['id'].upper()+'_TOKEN', '')
 
 def provider_request(account, method, suffix='', payload=None):
     if account['channel'] not in {'whatsapp','instagram','messenger'}:

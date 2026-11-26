@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: wasla-queue-monitor
+  group: labbily-queue-monitor
   cancel-in-progress: false
 jobs:
   queue:

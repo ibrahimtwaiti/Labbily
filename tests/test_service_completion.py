@@ -6,10 +6,10 @@ import unittest
 import httpx
 from fastapi import HTTPException
 import test_service_v2 as base
-from wasla import service as s
-from wasla.db import transaction, one, uid, now
-from wasla.service_templates import pages, components
-from wasla.service_media import process_media, fetch_provider_media
+from labbily import service as s
+from labbily.db import transaction, one, uid, now
+from labbily.service_templates import pages, components
+from labbily.service_media import process_media, fetch_provider_media
 
 class Completion(unittest.TestCase):
     setUp=base.ServiceV2.setUp
@@ -34,19 +34,19 @@ class Completion(unittest.TestCase):
 
     def test_media_scan_before_storage_and_replay(self):
         aid,t,m=self.media_job();storage=MagicMock()
-        with patch.dict(os.environ,{'WASLA_MEDIA_BUCKET':'private-test'}),patch('wasla.service_media.client',return_value=storage),patch('wasla.service_media.fetch_provider_media',return_value=(b'\x89PNG\r\n\x1a\nfixture','image/png')),patch('wasla.service_media.scan',return_value='hash') as scan:
+        with patch.dict(os.environ,{'LABBILY_MEDIA_BUCKET':'private-test'}),patch('labbily.service_media.client',return_value=storage),patch('labbily.service_media.fetch_provider_media',return_value=(b'\x89PNG\r\n\x1a\nfixture','image/png')),patch('labbily.service_media.scan',return_value='hash') as scan:
             self.assertTrue(process_media());self.assertFalse(process_media());scan.assert_called_once();storage.put_object.assert_called_once()
         self.assertEqual(len(self.client.get('/api/v2/tickets/'+t['id']).json()['attachments']),1)
 
     def test_media_rejection_never_stores(self):
         self.media_job();storage=MagicMock()
-        with patch('wasla.service_media.client',return_value=storage),patch('wasla.service_media.fetch_provider_media',side_effect=HTTPException(422,'untrusted_provider_media_url')):
+        with patch('labbily.service_media.client',return_value=storage),patch('labbily.service_media.fetch_provider_media',side_effect=HTTPException(422,'untrusted_provider_media_url')):
             self.assertTrue(process_media());storage.put_object.assert_not_called()
         with transaction() as db:self.assertEqual(one(db,'SELECT state FROM service_media_jobs')['state'],'rejected')
 
     def test_media_outage_retries_bounded(self):
         self.media_job()
-        with patch('wasla.service_media.client',side_effect=HTTPException(503,'storage_unavailable')):
+        with patch('labbily.service_media.client',side_effect=HTTPException(503,'storage_unavailable')):
             for _ in range(5):
                 with transaction() as db:db.execute('UPDATE service_media_jobs SET next_attempt=0')
                 self.assertTrue(process_media())
@@ -61,13 +61,13 @@ class Completion(unittest.TestCase):
 
     def test_pagination_uses_cursor_not_untrusted_next_url(self):
         responses=[httpx.Response(200,json={'data':[{'id':'1'}],'paging':{'next':'https://attacker.test/steal','cursors':{'after':'a/b?secret'}}}),httpx.Response(200,json={'data':[{'id':'2'}]})]
-        with patch('wasla.service.provider_request',side_effect=responses) as call:
+        with patch('labbily.service.provider_request',side_effect=responses) as call:
             self.assertEqual(len(pages({},'phone_numbers')),2)
             self.assertEqual(call.call_args.args[2],'/phone_numbers?limit=100&after=a%2Fb%3Fsecret')
 
     def test_pagination_loop_fails_without_partial_approval(self):
         response=httpx.Response(200,json={'data':[],'paging':{'next':'x','cursors':{'after':'same'}}})
-        with patch('wasla.service.provider_request',return_value=response),self.assertRaises(HTTPException):pages({},'message_templates')
+        with patch('labbily.service.provider_request',return_value=response),self.assertRaises(HTTPException):pages({},'message_templates')
 
     def test_template_header_buttons_validation(self):
         aid,t,*_=self.incoming()
@@ -104,7 +104,7 @@ class Completion(unittest.TestCase):
         aid,t=self.old_ticket()
         with transaction() as db:db.execute('INSERT INTO service_media VALUES(?,?,?,?,?,?,?,?,?)',('media','a',t['id'],'key','image/png',1,'hash','clean',1))
         storage=MagicMock();storage.delete_object.side_effect=RuntimeError('offline')
-        with patch.dict(os.environ,{'WASLA_MEDIA_BUCKET':'test'}),patch('wasla.service_media.client',return_value=storage):
+        with patch.dict(os.environ,{'LABBILY_MEDIA_BUCKET':'test'}),patch('labbily.service_media.client',return_value=storage):
             with self.assertRaises(RuntimeError):self.client.post('/api/v2/retention/run',json={})
         with transaction() as db:self.assertEqual(db.execute('SELECT count(*) FROM service_redactions').fetchone()[0],0)
         self.login('admin-b');self.assertEqual(self.client.get('/api/v2/retention').json()['eligible_ticket_ids'],[])
@@ -115,7 +115,7 @@ class Completion(unittest.TestCase):
         self.assertEqual(self.client.post('/api/v2/accounts/'+aid+'/snap/sync',json={}).status_code,409)
         self.client.put('/api/v2/accounts/'+aid+'/approval',json={'reference':'test official allowlist evidence'})
         data={'request_status':'SUCCESS','public_profiles':[{'sub_request_status':'SUCCESS','public_profile':{'id':'snap123','display_name':'Test'}}]}
-        with patch('wasla.service_channels.httpx.get',return_value=httpx.Response(200,json=data)):
+        with patch('labbily.service_channels.httpx.get',return_value=httpx.Response(200,json=data)):
             self.assertEqual(self.client.post('/api/v2/accounts/'+aid+'/snap/sync',json={}).status_code,200)
         r=self.client.get('/api/v2/accounts/'+aid+'/snap').json();self.assertFalse(r['customer_messaging']);self.assertIsNotNone(r['profile'])
         self.login('admin-b');self.assertEqual(self.client.get('/api/v2/accounts/'+aid+'/snap').status_code,404)

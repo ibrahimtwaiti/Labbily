@@ -47,7 +47,7 @@ class RegisterPhone(BaseModel):
 
 
 def configuration():
-    keys = ['META_APP_ID','META_APP_SECRET','META_SIGNUP_CONFIG_ID','META_GRAPH_VERSION','META_SYSTEM_USER_TOKEN','META_VERIFY_TOKEN','WASLA_OAUTH_ORIGIN']
+    keys = ['META_APP_ID','META_APP_SECRET','META_SIGNUP_CONFIG_ID','META_GRAPH_VERSION','META_SYSTEM_USER_TOKEN','META_VERIFY_TOKEN','LABBILY_OAUTH_ORIGIN']
     return {k: value(k) for k in keys}
 
 
@@ -57,7 +57,7 @@ def enabled(u):
     from .launch import meta_gate
     meta_gate(u['tenant_id'],'whatsapp')
     config = configuration()
-    if not all(config.values()) or config['META_GRAPH_VERSION'] not in SUPPORTED_VERSIONS or not config['WASLA_OAUTH_ORIGIN'].startswith('https://'):
+    if not all(config.values()) or config['META_GRAPH_VERSION'] not in SUPPORTED_VERSIONS or not config['LABBILY_OAUTH_ORIGIN'].startswith('https://'):
         raise HTTPException(503,'meta_signup_configuration_incomplete')
     cipher()
     return config
@@ -139,7 +139,7 @@ def start(request:Request,u=Depends(user)):
     with transaction() as db:
         db.execute('DELETE FROM meta_signup_sessions WHERE expires_at<?',(clock-86400,))
         db.execute('INSERT INTO meta_signup_sessions VALUES(?,?,?,?,?,?,?,?,NULL)',
-            (digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('wasla_session','')),config['META_APP_ID'],config['META_SIGNUP_CONFIG_ID'],config['META_GRAPH_VERSION'],clock+600))
+            (digest(state),u['tenant_id'],u['id'],digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))),config['META_APP_ID'],config['META_SIGNUP_CONFIG_ID'],config['META_GRAPH_VERSION'],clock+600))
         audit(db,u,'meta.signup.started',u['tenant_id'])
     return {'state':state,'app_id':config['META_APP_ID'],'config_id':config['META_SIGNUP_CONFIG_ID'],
         'api_version':config['META_GRAPH_VERSION'], 'extras':{'version':'v5','features':[{'name':'whatsapp_business_app_onboarding','enabled':False}]}}
@@ -149,7 +149,7 @@ def consume(state,request,u,config):
     clock=int(time.time())
     with transaction() as db:
         r=one(db,'SELECT * FROM meta_signup_sessions WHERE state_hash=?',(digest(state),))
-        if not r or r['tenant_id']!=u['tenant_id'] or r['user_id']!=u['id'] or r['session_hash']!=digest(request.cookies.get('wasla_session','')) or r['expires_at']<=clock or r['consumed_at'] is not None:
+        if not r or r['tenant_id']!=u['tenant_id'] or r['user_id']!=u['id'] or r['session_hash']!=digest(request.cookies.get('labbily_session',request.cookies.get('wasla_session',''))) or r['expires_at']<=clock or r['consumed_at'] is not None:
             raise HTTPException(403,'invalid_or_expired_meta_state')
         if (r['app_id'],r['config_id'],r['api_version']) != (config['META_APP_ID'],config['META_SIGNUP_CONFIG_ID'],config['META_GRAPH_VERSION']):
             raise HTTPException(409,'meta_configuration_changed_restart')
@@ -267,9 +267,9 @@ def usage(u=Depends(user)):
 def openapi(u=Depends(user)):
     permit(u,'settings')
     from fastapi.openapi.utils import get_openapi
-    schema=get_openapi(title='Wasla Meta Integration API',version='0.1.0',routes=[r for r in router.routes if r.path.startswith('/api/v2/meta/')])
+    schema=get_openapi(title='Labbily Meta Integration API',version='0.1.0',routes=[r for r in router.routes if r.path.startswith('/api/v2/meta/')])
     schema.setdefault('components',{})['securitySchemes']={
-        'SessionCookie':{'type':'apiKey','in':'cookie','name':'wasla_session'},
+        'SessionCookie':{'type':'apiKey','in':'cookie','name':'labbily_session'},
         'CsrfHeader':{'type':'apiKey','in':'header','name':'X-CSRF-Token'}}
     for methods in schema['paths'].values():
         for method,operation in methods.items():

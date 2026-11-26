@@ -32,8 +32,8 @@
 لإعادة الاختبار من المستودع:
 
 ```sh
-python -m scripts.benchmark_service --messages 1000 --workers 4 --output /tmp/wasla-benchmark.json
-python -m scripts.benchmark_service --messages 10000 --workers 8 --output /tmp/wasla-stress.json
+python -m scripts.benchmark_service --messages 1000 --workers 4 --output /tmp/labbily-benchmark.json
+python -m scripts.benchmark_service --messages 10000 --workers 8 --output /tmp/labbily-stress.json
 ```
 
 ## النتائج المحلية المسجلة

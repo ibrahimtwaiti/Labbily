@@ -16,10 +16,10 @@ def uid():
     return uuid4().hex
 
 def path():
-    return os.environ.get('WASLA_DB', str(ROOT / 'data/wasla.sqlite3'))
+    return os.environ.get('LABBILY_DB', str(ROOT / ('data/wasla.sqlite3' if (ROOT / 'data/wasla.sqlite3').exists() else 'data/labbily.sqlite3')))
 
 def pg_url():
-    return os.environ.get('DATABASE_URL') or os.environ.get('WASLA_DATABASE_URL')
+    return os.environ.get('DATABASE_URL') or os.environ.get('LABBILY_DATABASE_URL')
 
 def postgres():
     return bool(pg_url())
@@ -148,35 +148,35 @@ def initialize():
     if postgres():
         with transaction() as db:
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=1'):
-                raise RuntimeError('PostgreSQL migrations missing: python -m wasla.cli init')
+                raise RuntimeError('PostgreSQL migrations missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=2'):
-                raise RuntimeError('Security migration missing: python -m wasla.cli init')
+                raise RuntimeError('Security migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=3'):
-                raise RuntimeError('V2 migration missing: python -m wasla.cli init')
+                raise RuntimeError('V2 migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=4'):
-                raise RuntimeError('V2 completion migration missing: python -m wasla.cli init')
+                raise RuntimeError('V2 completion migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=5'):
-                raise RuntimeError('Provider console migration missing: python -m wasla.cli init')
+                raise RuntimeError('Provider console migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=6'):
-                raise RuntimeError('Meta onboarding migration missing: python -m wasla.cli init')
+                raise RuntimeError('Meta onboarding migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=7'):
-                raise RuntimeError('Meta lifecycle migration missing: python -m wasla.cli init')
+                raise RuntimeError('Meta lifecycle migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=8'):
-                raise RuntimeError('SaaS migration missing: python -m wasla.cli init')
+                raise RuntimeError('SaaS migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=9'):
-                raise RuntimeError('Facebook Pages migration missing: python -m wasla.cli init')
+                raise RuntimeError('Facebook Pages migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=10'):
-                raise RuntimeError('Completion migration missing: python -m wasla.cli init')
+                raise RuntimeError('Completion migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=11'):
-                raise RuntimeError('Agent Studio migration missing: python -m wasla.cli init')
+                raise RuntimeError('Agent Studio migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=12'):
-                raise RuntimeError('Conversation workspace migration missing: python -m wasla.cli init')
+                raise RuntimeError('Conversation workspace migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=13'):
-                raise RuntimeError('Agent jobs migration missing: python -m wasla.cli init')
+                raise RuntimeError('Agent jobs migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=14'):
-                raise RuntimeError('Agent retrieval migration missing: python -m wasla.cli init')
+                raise RuntimeError('Agent retrieval migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=15'):
-                raise RuntimeError('Action approval migration missing: python -m wasla.cli init')
+                raise RuntimeError('Action approval migration missing: python -m labbily.cli init')
         return
     Path(path()).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path()) as db:

@@ -8,7 +8,7 @@ from scripts.media_scanner import app,scan_bytes
 class Scanner(unittest.TestCase):
     def test_auth_checksum_clean_infected_and_outage(self):
         client=TestClient(app);raw=b'test bytes';headers={'Authorization':'Bearer '+'x'*32,'X-Content-SHA256':hashlib.sha256(raw).hexdigest()}
-        with patch.dict(os.environ,{'WASLA_MEDIA_SCANNER_TOKEN':'x'*32}):
+        with patch.dict(os.environ,{'LABBILY_MEDIA_SCANNER_TOKEN':'x'*32}):
             self.assertEqual(client.post('/scan',content=raw).status_code,401)
             self.assertEqual(client.post('/scan',content=b'changed',headers=headers).status_code,422)
             for verdict in ['clean','infected']:
