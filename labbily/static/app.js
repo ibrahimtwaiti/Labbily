@@ -302,12 +302,25 @@ async function overview(main) {
   }
   const menu=menus[me.role];
   const canReport=menu.some(([key])=>key==='reports');
+  if(pageLeaving || !main.isConnected)return;
+  const loading=new AbortController();
+  const cancel=()=>loading.abort();
+  addEventListener('pagehide',cancel,{once:true});
+  const [activityResult,reportResult]=await Promise.allSettled([
+    api('/v2/tickets?limit=5',{signal:loading.signal}),
+    canReport ? api('/v2/reports',{signal:loading.signal}) : Promise.resolve(null)
+  ]);
+  removeEventListener('pagehide',cancel);
+  if(loading.signal.aborted || !main.isConnected)return;
+  for(const result of [activityResult,reportResult]){
+    if(result.status==='rejected' && result.reason.status===401)throw result.reason;
+  }
   const actions=[[tr("المحادثات"),'/app/inbox']];
   let metrics=[], period='';
   if (canReport) {
     actions.push([tr("التقارير"),'/app/reports']);
-    try {
-      const report=await api('/v2/reports');
+    if(reportResult.status==='fulfilled'){
+      const report=reportResult.value;
       const number=new Intl.NumberFormat(LANG,{maximumFractionDigits:1});
       const measure=(v,unit='')=>Number.isFinite(v)?number.format(v)+unit:'—';
       metrics=[
@@ -317,30 +330,28 @@ async function overview(main) {
         [sv('وسيط أول رد بشري','Median first reply'),Number.isFinite(report.first_human_median_seconds)?measure(report.first_human_median_seconds/60,sv(' د',' min')):'—','reports']
       ];
       period=sv('مؤشرات خدمة العملاء · آخر ٣٠ يومًا','Customer service metrics · Last 30 days');
-    } catch (error) {
-      if (error.status===401) throw error;
+    } else {
       period=sv('تعذّر تحميل المؤشرات. افتح التقارير لإعادة المحاولة.','Metrics could not load. Open reports to retry.');
     }
   } else {
     actions.push([tr("مهام المتابعة"),'/app/tasks']);
   }
   main.innerHTML=overviewHero(sv('نظرة','Workspace'),sv('عامة','overview'),sv('تابع المحادثات وأداء فريقك من مكان واحد.','Track conversations and team performance in one place.'),actions,metrics,period)+
-    `<div class="overview-panels"><section class="card recent-activity"><div class="split-head"><h2>${sv('آخر المحادثات','Recent conversations')}</h2><a class="card-link" href="/app/inbox">${tr("عرض الجميع ←")}</a></div><div id="recent-tickets" aria-busy="true"></div></section>
+    `<div class="overview-panels"><section class="card recent-activity"><div class="split-head"><h2>${sv('آخر المحادثات','Recent conversations')}</h2><a class="card-link" href="/app/inbox">${tr("عرض الجميع ←")}</a></div><div id="recent-tickets"></div></section>
     <section class="card quick-routes"><h2>${sv('أدوات مساحة العمل','Workspace tools')}</h2>
     ${menu.filter(([key])=>['contacts','agents','workflows','channels','tasks'].includes(key)).map(([key,label])=>
       `<a href="/app/${key}"><span class="route-icon">${icon(workspaceIcons[key]||'workflow')}</span><b>${esc(label)}</b>${icon('arrow')}</a>`).join('')}</section></div>`;
   const recent=main.querySelector('#recent-tickets');
-  try {
-    const tickets=await api('/v2/tickets?limit=5');
+  if(activityResult.status==='fulfilled'){
+    const tickets=activityResult.value;
     recent.innerHTML=tickets.length ? tickets.map(ticket=>
       `<a class="recent-row" href="/app/inbox?ticket=${encodeURIComponent(ticket.id)}">
         <span class="contact-avatar">${esc((ticket.name||'·').slice(0,1))}</span><span><b>${esc(ticket.name)}</b><small>${esc(ticket.last_message||ticket.account_label)}</small></span>
         <span class="ticket-badge">${ss(ticket.status)}</span><time>${epoch(ticket.updated_at)}</time></a>`).join('') :
       empty(sv('لا توجد محادثات بعد','No conversations yet'),sv('تظهر هنا أحدث الرسائل بعد وصول أول محادثة.','New conversations will appear here as messages arrive.'));
-  } catch(error) {
-    if(error.status===401)throw error;
+  } else {
     recent.textContent=sv('تعذّر تحميل المحادثات.','Conversations could not be loaded.');
-  } finally { recent.removeAttribute('aria-busy'); }
+  }
 }
 async function requestsView(main){const data=await api('/admin/requests');main.innerHTML=heading(tr("طلبات الخدمات"),tr("من أول احتياج إلى عرض معتمد ومشروع تنفيذ."))+`<div class="toolbar"><input id="request-search" class="search" aria-label="${tr("بحث في الطلبات")}" placeholder="${tr("ابحث بالشركة أو الرقم المرجعي…")}"></div><div id="requests-table"></div>`;const paint=q=>{const filtered=data.filter(r=>(r.company+r.reference+r.name).includes(q));document.querySelector('#requests-table').innerHTML=filtered.length?table([tr("الطلب"),tr("الشركة"),tr("الخدمة"),tr("الحالة"),tr("المسؤول"),''],filtered.map(r=>`<tr><td>${esc(r.reference)}</td><td class="table-title">${esc(r.company)}${r.duplicate_phone?tMarkup("<br><small class=\"muted\">رقم تواصل موجود بطلب آخر</small>"):''}</td><td>${esc(serviceName(r.service))}</td><td>${status(r.status)}</td><td>${esc(r.owner_name)}</td><td><button class="light small" data-request="${r.id}">${tr("التفاصيل")}</button></td></tr>`)):empty(tr("لا توجد طلبات مطابقة"));wireRows('data-request',id=>{const r=data.find(x=>x.id===id);modal(tr("طلب ")+r.reference,`<div class="full notice"><b>${esc(r.name)} — ${esc(r.company)}</b><br>${esc(r.phone)} · ${esc(r.email)}<br>${esc(r.country)} · ${esc(r.activity)}<br>${esc(r.need)}<br><small>${tr("موافقة التواصل: ")}${esc(date(r.consented_at))} · ${tr("التسويق: ")}${r.marketing_consent?tr("نعم"):tr("لا")}</small></div>${select('status',tr("حالة الطلب"),['new','review','information','quoted','accepted','rejected','closed'],r.status)}${field('payment_reference',tr("مرجع التحصيل — اختياري"),'text',r.payment_reference,false)}${area('quote',tr("عرض السعر: النطاق والمخرجات والمدة والرسوم"),r.quote,false)}<p class="full micro">${tr("قبول العرض ينشئ مشروعًا بمراحل تلقائيًا. لا يعتبر مبلغًا محصلًا.")}</p>`,d=>send('/admin/requests/'+id,'PATCH',d))})};paint('');document.querySelector('#request-search').oninput=e=>paint(e.target.value)}
 async function tenantsView(main){const data=await api('/admin/tenants');main.innerHTML=heading(tr("الشركات"),tr("مساحات مستقلة مع تفعيل إداري."),button('add-tenant',tr("+ إضافة شركة")))+(data.length?table([tr("الشركة"),tr("الحالة"),tr("تاريخ الإنشاء"),''],data.map(t=>`<tr><td class="table-title">${esc(t.name)}</td><td>${status(t.status)}</td><td>${date(t.created_at)}</td><td><button data-tenant="${t.id}" class="small light">${tr("إدارة الحالة")}</button></td></tr>`)):empty(tr("ابدأ بأول شركة"),tr("أنشئ مساحة وحساب مدير، ثم أكمل التجهيز.")));document.querySelector('#add-tenant').onclick=()=>modal(tr("شركة جديدة"),field('name',tr("اسم الشركة"))+field('owner',tr("اسم مدير الشركة"))+field('email',tr("بريد المدير"),'email')+field('password',tr("كلمة مرور أولية — 12 حرفًا على الأقل"),'password')+tMarkup("<p class=\"full micro\">سلّم بيانات الدخول بطريقة آمنة. يستطيع المدير تغيير كلمة المرور من إعدادات الحساب.</p>"),d=>send('/admin/tenants','POST',d));wireRows('data-tenant',id=>modal(tr("حالة الشركة"),select('status',tr("الحالة"),['setup','active','suspended'],data.find(t=>t.id===id).status),d=>send('/admin/tenants/'+id,'PATCH',d)))}
