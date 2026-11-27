@@ -60,7 +60,7 @@ const empty=(title,body=tr("ستظهر البيانات هنا بعد إضافت
   `<div class="empty"><img class="state-art" src="${illustration}" width="96" height="80" alt=""><h3>${title}</h3><p>${body}</p></div>`;
 const heading=(title,subtitle,action='')=>`<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div>${action}</div>`;
 const button=(id,label,cls='')=>`<button id="${id}" class="${cls}">${label}</button>`;
-const table=(headers,body)=>`<div class="table-scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`;
+const table=(headers,body)=>`<div class="data-sheet"><div class="sheet-tools"><button type="button" class="light small expand-sheet">${sv('توسيع الجدول','Expand table')} <span aria-hidden="true">⛶</span></button></div><div class="table-scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div></div>`;
 const errorBox='<div class="error" role="alert"></div>';
 function toast(message){const el=document.querySelector('#toast');el.textContent=message;el.classList.add('visible');setTimeout(()=>el.classList.remove('visible'),4500)}
 // Requests can overlap when a provider dashboard loads several panels together.
@@ -172,7 +172,7 @@ function serviceDetail(id) {
     <div class="section-end">${action}</div>`);
 }
 function requestPage(){if(!catalog.request_ready){publicShell(intro('Labbily',tr('استقبال الطلبات لم يُفعّل بعد؛ يرجى المحاولة لاحقًا'),'')+`<a class="button" href="/services">${tr('اكتشف الحلول')}</a>`);return}let key=sessionStorage.getItem('labbily.request.key')||crypto.randomUUID();sessionStorage.setItem('labbily.request.key',key);const selected=new URLSearchParams(location.search).get('service')||'unified-inbox';publicShell(intro(tr("ابدأ مع Labbily"),tr("لنتعرف على عملك."),tr("أرسل احتياجك لنراجع النطاق والخدمة المناسبة. ستحصل على رقم مرجعي بعد حفظ طلبك."))+`<div class="two-col"><form id="request-form" class="card">${errorBox}<div class="form-grid">${field('name',tr("الاسم"))}${field('company',tr("اسم الشركة"))}${field('phone',tr("رقم التواصل الدولي"),'tel')}${field('country',tr("الدولة"))}${field('activity',tr("نشاط الشركة"))}${field('email',tr("البريد الإلكتروني — اختياري"),'email','',false)}${select('service',tr("الخدمة المطلوبة"),catalog.services.filter(s=>s.status!=='planned').map(s=>[s.id,s.name]),selected)}${area('need',tr("صف احتياجك باختصار"))}</div><label class="check"><input type="checkbox" name="contact_consent" required><span>${esc(catalog.consent)} <a href="/privacy">${tr("تفاصيل الخصوصية")}</a></span></label><label class="check"><input type="checkbox" name="marketing_consent"><span>${tr("أرغب في استقبال أخبار وعروض تسويقية — اختياري، ويمكنني الانسحاب لاحقًا.")}</span></label><button type="submit">${tr("أرسل طلبك ←")}</button></form><aside class="card"><p class="eyebrow">${tr("ماذا يحدث بعد الإرسال؟")}</p><h3>${tr("طلب محفوظ. متابعة واضحة.")}</h3><p>${tr("١. نسجل طلبك برقم مرجعي.")}</p><p>${tr("٢. يراجع المسؤول الخدمة والاحتياج.")}</p><p>${tr("٣. نتواصل لاستكمال التفاصيل وإعداد العرض.")}</p><hr><p class="small-text">${tr("لا توجد أسعار أو رسوم تلقائية عند إرسال الطلب. تفاصيل الاتفاق تعتمد قبل التشغيل.")}</p></aside></div>`);const form=document.querySelector('#request-form');const saved=sessionStorage.getItem('labbily.request.draft');if(saved){try{const d=JSON.parse(saved);for(const [k,v] of Object.entries(d))if(form.elements[k]&&k!=='service')form.elements[k].value=v}catch{}}form.addEventListener('input',()=>{const d=formData(form);delete d.contact_consent;delete d.marketing_consent;sessionStorage.setItem('labbily.request.draft',JSON.stringify(d))});bindForm(form,async(d)=>{const result=await send('/requests','POST',{...d,contact_consent:!!d.contact_consent,marketing_consent:!!d.marketing_consent,source:new URLSearchParams(location.search).get('utm_source')||''},{'Idempotency-Key':key});sessionStorage.removeItem('labbily.request.draft');sessionStorage.removeItem('labbily.request.key');form.innerHTML=`<div class="success"><h2>${tr("تم حفظ طلبك بنجاح")}</h2><p>${tr("احتفظ برقم طلبك للمتابعة مع الفريق.")}</p><strong>${esc(result.reference)}</strong><div class="actions"><a class="button" href="/">${tr("العودة للرئيسية")}</a></div></div>`})}
-function loginPage(){publicShell(`<div class="card login">${brandLogo()}<p class="eyebrow">${tr("مساحة العمل")}</p><h1>${tr("أهلًا بعودتك.")}</h1><p>${tr("سجّل الدخول لمتابعة عملائك وفريقك.")}</p><form id="login-form">${errorBox}${field('email',tr("البريد الإلكتروني"),'email')}<label class="field">${tr("كلمة المرور")}<input type="password" name="password" required maxlength="128" autocomplete="current-password"></label><button type="submit">${tr("الدخول إلى مساحة العمل ←")}</button></form><p class="micro">${tr("يُنشئ المدير حسابك. لاستعادة الوصول، تواصل مع مسؤول المساحة.")}</p></div>`);bindForm(document.querySelector('#login-form'),async d=>{await send('/auth/login','POST',d);location.href='/app'})}
+function loginPage(){publicShell(`<section class="login-layout"><div class="login-art" aria-hidden="true">${conversationArtwork()}</div><div class="card login">${brandLogo()}<p class="eyebrow">${tr("مساحة العمل")}</p><h1>${tr("أهلًا بعودتك.")}</h1><p>${tr("سجّل الدخول لمتابعة عملائك وفريقك.")}</p><form id="login-form">${errorBox}${field('email',tr("البريد الإلكتروني"),'email')}<label class="field">${tr("كلمة المرور")}<input type="password" name="password" required maxlength="128" autocomplete="current-password"></label><button type="submit">${tr("الدخول إلى مساحة العمل ←")}</button></form><p class="micro">${tr("يُنشئ المدير حسابك. لاستعادة الوصول، تواصل مع مسؤول المساحة.")}</p></div></section>`);bindForm(document.querySelector('#login-form'),async d=>{await send('/auth/login','POST',d);location.href='/app'})}
 const faqs = [
   [tr("ما الحل المناسب لفريقي؟"), tr("ابدأ بالمحادثات إن كنت تحتاج إلى تنظيم الردود، أو استكشف الأتمتة إذا أردت توزيع الاستفسارات تلقائيًا.")],
   [tr("كيف أعرف ما هو متاح؟"), tr("توضح كل بطاقة حالة الحل. وتعرض صفحة التفاصيل المزايا المتاحة وشروط تشغيلها.")],
@@ -189,7 +189,7 @@ if(path==='/privacy'||path==='/terms'){policyPage(path);return}
 publicShell(body||empty(tr("الصفحة غير موجودة")))}
 function notFound(){publicShell(intro('404',tr("لم نجد هذه الصفحة."),tr("يمكنك العودة للرئيسية أو استكشاف الخدمات."))+tMarkup("<a class=\"button\" href=\"/\">الرئيسية</a>"))}
 const menus={provider:[['integrations',LANG==='en'?'Integrations center':'مركز الربط والمنصات','⇄'],['overview',tr("نظرة عامة"),'◈'],['requests',tr("طلبات الخدمات"),'▤'],['projects',tr("المشروعات"),'□'],['tenants',tr("الشركات"),'▥'],['content',tr("محتوى الموقع"),'✎'],['operations',tr("صحة التشغيل"),'⇄'],['audit',tr("سجل التدقيق"),'≡']],admin:[['overview',tr("نظرة عامة"),'◈'],['inbox',tr("المحادثات"),'▣'],['contacts',tr("العملاء"),'◉'],['opportunities',tr("فرص البيع"),'←'],['tasks',tr("مهامي"),'☑'],['projects',tr("مشروعات الخدمات"),'□'],['reports',tr("التقارير"),'▥'],['team',tr("الفريق"),'♧'],['channels',tr("القنوات"),'⇄'],['audit',tr("سجل التدقيق"),'≡']],supervisor:[['overview',tr("نظرة عامة"),'◈'],['inbox',tr("المحادثات"),'▣'],['contacts',tr("العملاء"),'◉'],['opportunities',tr("فرص البيع"),'←'],['tasks',tr("مهامي"),'☑'],['reports',tr("التقارير"),'▥']],sales:[['overview',tr("نظرة عامة"),'◈'],['inbox',tr("محادثاتي"),'▣'],['contacts',tr("العملاء"),'◉'],['opportunities',tr("فرصي"),'←'],['tasks',tr("مهامي"),'☑']],marketing:[['contacts',tr("العملاء"),'◉']],services:[['projects',tr("مشروعات الخدمات"),'□']],reader:[['reports',tr("التقارير"),'▥']]};
-const workspaceIcons = {overview:'dashboard',inbox:'messages',contacts:'contacts',team:'team',channels:'api-connection',integrations:'integrations',reports:'reports',audit:'security',tasks:'calendar',privacy:'security',privacyops:'security',content:'settings',account:'user-profile',requests:'customer-support',opportunities:'analytics',projects:'workflow',billing:'reports',commerce:'settings',operations:'automation',tenants:'team',metadata:'integrations'};
+const workspaceIcons = {agents:'ai-assistant',agentpolicy:'bot',overview:'dashboard',inbox:'messages',contacts:'contacts',team:'team',channels:'api-connection',integrations:'integrations',reports:'reports',audit:'security',tasks:'calendar',privacy:'security',privacyops:'security',content:'settings',account:'user-profile',requests:'customer-support',opportunities:'analytics',projects:'workflow',billing:'reports',commerce:'settings',operations:'automation',tenants:'team',metadata:'integrations'};
 function bindSidebar() {
   const layout = document.querySelector('.app-layout'), toggle = document.querySelector('#sidebar-toggle');
   const mobile = matchMedia('(max-width:760px)');
@@ -206,17 +206,83 @@ function bindSidebar() {
   };
   paint();
 }
-function dashboardShell(view){const menu=menus[me.role];app.innerHTML=`<div class="app-layout" data-view="${esc(view)}"><aside id="workspace-sidebar" class="sidebar">${brandLogo(true,true)}<div class="sidebar-label">${tr("مساحة العمل")}</div><nav id="workspace-nav" aria-label="${tr("تنقل مساحة العمل")}">${menu.map(([v,t,i])=>`<a href="/app/${v}" class="${view===v?'active':''}" ${view===v?'aria-current="page"':''} aria-label="${esc(t)}" title="${esc(t)}"><span class="nav-symbol">${icon(workspaceIcons[v]||'dashboard')}</span><span class="nav-text">${t}</span></a>`).join('')}</nav><div class="sidebar-bottom">${tr("Labbily · الإصدار الثاني")}<a href="/">${tr("زيارة الموقع ←")}</a><a href="/app/account">${tr("إعدادات حسابي")}</a></div></aside><div><header class="app-top"><button id="sidebar-toggle" type="button" class="outline small" aria-controls="workspace-nav">☰</button><div class="workspace-location"><b>${esc(menu.find(m=>m[0]===view)?.[1]||tr("الحساب"))}</b></div><div class="user-pill"><span class="avatar">${esc(me.name[0])}</span><div class="small-text"><a href="/app/account"><b>${esc(me.name)}</b></a><br><span class="muted">${esc(labels[me.role])}</span></div>${languageLink()}<button id="logout" class="outline small">${tr("خروج")}</button></div></header><main id="main" class="app-main"><div class="loading" role="status">${tr("جارٍ تحميل البيانات…")}</div></main></div>`;bindSidebar();document.querySelector('#logout').onclick=async()=>{try{await send('/auth/logout','POST',{});location.href='/login'}catch(e){toast(e.message)}}}
+function navigationGroups(menu, view) {
+  const sections = [
+    [sv('مساحة العمل','Workspace'), ['overview','inbox','contacts','opportunities','tasks','requests','projects','tenants']],
+    [sv('القنوات والأتمتة','Channels & automation'), ['integrations','channels','agents','workflows','agentpolicy','metadata']],
+    [sv('الإدارة','Management'), []]
+  ];
+  const available = new Map(menu.map(item => [item[0], item[1]]));
+  return sections.map(([label, keys], index) => {
+    const links = (index === sections.length - 1 ? Array.from(available.keys()) : keys.filter(key => available.has(key)))
+      .map(key => {
+        const title = esc(available.get(key));
+        available.delete(key);
+        return `<a href="/app/${key}" class="${key===view?'active':''}" ${key===view?'aria-current="page"':''} title="${title}" aria-label="${title}">
+          <span class="nav-symbol">${icon(workspaceIcons[key] || 'dashboard')}</span><span class="nav-text">${title}</span></a>`;
+      });
+    return links.length ? `<div class="nav-group"><div class="sidebar-label">${label}</div>${links.join('')}</div>` : '';
+  }).join('');
+}
+
+function dashboardShell(view) {
+  const menu = menus[me.role];
+  const title = menu.find(item => item[0]===view)?.[1] || tr("الحساب");
+  app.innerHTML = `<div class="app-layout" data-view="${esc(view)}">
+    <aside id="workspace-sidebar" class="sidebar">
+      ${brandLogo(true,true)}
+      <nav id="workspace-nav" aria-label="${tr("تنقل مساحة العمل")}">${navigationGroups(menu, view)}</nav>
+      <div class="profile-dock"><details><summary title="${tr("إعدادات حسابي")}">
+        <span class="avatar">${esc(me.name[0])}</span><span class="profile-name"><b>${esc(me.name)}</b><small>${esc(labels[me.role])}</small></span><span class="profile-caret" aria-hidden="true">⌃</span>
+      </summary><div class="profile-menu"><a href="/app/account">${tr("إعدادات حسابي")}</a><a href="/">${tr("زيارة الموقع ←")}</a>${languageLink()}<button id="logout" class="light small">${tr("خروج")}</button></div></details></div>
+    </aside><div class="workspace-body"><header class="app-top">
+      <button id="sidebar-toggle" type="button" class="outline small" aria-controls="workspace-nav">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
+      <div class="workspace-location"><span>${tr("مساحة العمل")}</span><i aria-hidden="true">/</i><b>${esc(title)}</b></div>
+      ${themeControl()}<a class="top-account" href="/app/account" title="${tr("إعدادات حسابي")}" aria-label="${tr("إعدادات حسابي")}">${esc(me.name[0])}</a>
+    </header><main id="main" class="app-main"><div class="loading" role="status">${tr("جارٍ تحميل البيانات…")}</div></main></div></div>`;
+  bindSidebar();
+  const profile = app.querySelector('.profile-dock details');
+  profile.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { profile.open = false; profile.querySelector('summary').focus(); }
+  });
+  document.querySelector('#logout').onclick = async () => {
+    try { await send('/auth/logout','POST',{}); location.href='/login'; } catch(e) { toast(e.message); }
+  };
+}
+// Move the live table so row actions and their keyboard bindings stay intact.
+document.addEventListener('click', event => {
+  const trigger = event.target.closest('.expand-sheet');
+  if (!trigger) return;
+  const sheet = trigger.closest('.data-sheet');
+  const grid = sheet.querySelector('.table-scroll');
+  const title = sheet.closest('dialog')?.querySelector('h2')?.textContent ||
+    sheet.closest('.card')?.querySelector('h3,h2')?.textContent ||
+    document.querySelector('.page-heading h1,.workspace-location b')?.textContent || sv('الجدول','Table');
+  const viewer = document.createElement('dialog');
+  viewer.className = 'sheet-dialog';
+  viewer.setAttribute('aria-label', title);
+  viewer.innerHTML = `<div class="dialog-header"><h2>${esc(title)}</h2><button type="button" class="outline small">${tr("إغلاق")}</button></div>`;
+  sheet.append(viewer);
+  viewer.append(grid);
+  viewer.querySelector('button').onclick = () => viewer.close();
+  viewer.addEventListener('close', () => {
+    if (viewer.contains(grid)) sheet.append(grid);
+    viewer.remove();
+    if (trigger.isConnected) trigger.focus();
+  }, {once:true});
+  viewer.showModal();
+});
 function wireRows(attr,callback){document.querySelectorAll(`[${attr}]`).forEach(el=>el.onclick=()=>{Promise.resolve(callback(el.getAttribute(attr))).catch(e=>toast(e.message))})}
 function overviewHero(title,accent,description,actions,metrics,period='') {
   const links=actions.map(([label,url],i)=>`<a class="${i?'hero-secondary':'button'}" href="${url}">${label}${i?'':icon('arrow')}</a>`).join('');
   const tiles=metrics.map(([label,value,glyph])=>
     `<div class="overview-metric"><span>${icon(glyph)}${esc(label)}</span><strong><bdi>${esc(String(value??'—'))}</bdi></strong></div>`).join('');
-  return `<section class="workspace-hero conversation-hero">
+  return `<section class="overview-header"><div class="workspace-hero conversation-hero">
     <div class="hero-copy"><h1>${title} <em>${accent}</em></h1><p class="lead">${description}</p><div class="actions">${links}</div></div>
-    ${conversationArtwork()}
-    ${tiles?`<div class="workspace-metrics">${tiles}</div>`:''}
+    ${conversationArtwork()}</div>
     ${period?`<p class="metrics-period">${period}</p>`:''}
+    ${tiles?`<div class="workspace-metrics">${tiles}</div>`:''}
   </section>`;
 }
 
@@ -258,9 +324,23 @@ async function overview(main) {
   } else {
     actions.push([tr("مهام المتابعة"),'/app/tasks']);
   }
-  main.innerHTML=overviewHero(sv('محادثات عملائك','Customer conversations'),
-    sv('في مساحة واحدة.','in one workspace.'),sv('تابع رسائل عملائك وأداء الفريق، وانتقل مباشرةً إلى المحادثة التي تحتاجك.','Review messages and team activity, then jump into the conversation that needs you.'),
-    actions,metrics,period)+`<div class="grid"><a class="card" href="/app/inbox">${icon('messages')}<h3>${tr("المحادثات")}</h3><p>${tr("راجع السجل، وأسند المحادثات وتابع الملاحظات.")}</p></a><a class="card" href="/app/opportunities">${icon('analytics')}<h3>${tr("فرص البيع")}</h3><p>${tr("حدّد المرحلة والمسؤول وموعد الخطوة التالية.")}</p></a><a class="card" href="/app/tasks">${icon('calendar')}<h3>${tr("مهام المتابعة")}</h3><p>${tr("احفظ مواعيدك وأنجز المهام المرتبطة بعملك.")}</p></a></div>`;
+  main.innerHTML=overviewHero(sv('نظرة','Workspace'),sv('عامة','overview'),sv('تابع المحادثات وأداء فريقك من مكان واحد.','Track conversations and team performance in one place.'),actions,metrics,period)+
+    `<div class="overview-panels"><section class="card recent-activity"><div class="split-head"><h2>${sv('آخر المحادثات','Recent conversations')}</h2><a class="card-link" href="/app/inbox">${tr("عرض الجميع ←")}</a></div><div id="recent-tickets" aria-busy="true"></div></section>
+    <section class="card quick-routes"><h2>${sv('أدوات مساحة العمل','Workspace tools')}</h2>
+    ${menu.filter(([key])=>['contacts','agents','workflows','channels','tasks'].includes(key)).map(([key,label])=>
+      `<a href="/app/${key}"><span class="route-icon">${icon(workspaceIcons[key]||'workflow')}</span><b>${esc(label)}</b>${icon('arrow')}</a>`).join('')}</section></div>`;
+  const recent=main.querySelector('#recent-tickets');
+  try {
+    const tickets=await api('/v2/tickets?limit=5');
+    recent.innerHTML=tickets.length ? tickets.map(ticket=>
+      `<a class="recent-row" href="/app/inbox?ticket=${encodeURIComponent(ticket.id)}">
+        <span class="contact-avatar">${esc((ticket.name||'·').slice(0,1))}</span><span><b>${esc(ticket.name)}</b><small>${esc(ticket.last_message||ticket.account_label)}</small></span>
+        <span class="ticket-badge">${ss(ticket.status)}</span><time>${epoch(ticket.updated_at)}</time></a>`).join('') :
+      empty(sv('لا توجد محادثات بعد','No conversations yet'),sv('تظهر هنا أحدث الرسائل بعد وصول أول محادثة.','New conversations will appear here as messages arrive.'));
+  } catch(error) {
+    if(error.status===401)throw error;
+    recent.textContent=sv('تعذّر تحميل المحادثات.','Conversations could not be loaded.');
+  } finally { recent.removeAttribute('aria-busy'); }
 }
 async function requestsView(main){const data=await api('/admin/requests');main.innerHTML=heading(tr("طلبات الخدمات"),tr("من أول احتياج إلى عرض معتمد ومشروع تنفيذ."))+`<div class="toolbar"><input id="request-search" class="search" aria-label="${tr("بحث في الطلبات")}" placeholder="${tr("ابحث بالشركة أو الرقم المرجعي…")}"></div><div id="requests-table"></div>`;const paint=q=>{const filtered=data.filter(r=>(r.company+r.reference+r.name).includes(q));document.querySelector('#requests-table').innerHTML=filtered.length?table([tr("الطلب"),tr("الشركة"),tr("الخدمة"),tr("الحالة"),tr("المسؤول"),''],filtered.map(r=>`<tr><td>${esc(r.reference)}</td><td class="table-title">${esc(r.company)}${r.duplicate_phone?tMarkup("<br><small class=\"muted\">رقم تواصل موجود بطلب آخر</small>"):''}</td><td>${esc(serviceName(r.service))}</td><td>${status(r.status)}</td><td>${esc(r.owner_name)}</td><td><button class="light small" data-request="${r.id}">${tr("التفاصيل")}</button></td></tr>`)):empty(tr("لا توجد طلبات مطابقة"));wireRows('data-request',id=>{const r=data.find(x=>x.id===id);modal(tr("طلب ")+r.reference,`<div class="full notice"><b>${esc(r.name)} — ${esc(r.company)}</b><br>${esc(r.phone)} · ${esc(r.email)}<br>${esc(r.country)} · ${esc(r.activity)}<br>${esc(r.need)}<br><small>${tr("موافقة التواصل: ")}${esc(date(r.consented_at))} · ${tr("التسويق: ")}${r.marketing_consent?tr("نعم"):tr("لا")}</small></div>${select('status',tr("حالة الطلب"),['new','review','information','quoted','accepted','rejected','closed'],r.status)}${field('payment_reference',tr("مرجع التحصيل — اختياري"),'text',r.payment_reference,false)}${area('quote',tr("عرض السعر: النطاق والمخرجات والمدة والرسوم"),r.quote,false)}<p class="full micro">${tr("قبول العرض ينشئ مشروعًا بمراحل تلقائيًا. لا يعتبر مبلغًا محصلًا.")}</p>`,d=>send('/admin/requests/'+id,'PATCH',d))})};paint('');document.querySelector('#request-search').oninput=e=>paint(e.target.value)}
 async function tenantsView(main){const data=await api('/admin/tenants');main.innerHTML=heading(tr("الشركات"),tr("مساحات مستقلة مع تفعيل إداري."),button('add-tenant',tr("+ إضافة شركة")))+(data.length?table([tr("الشركة"),tr("الحالة"),tr("تاريخ الإنشاء"),''],data.map(t=>`<tr><td class="table-title">${esc(t.name)}</td><td>${status(t.status)}</td><td>${date(t.created_at)}</td><td><button data-tenant="${t.id}" class="small light">${tr("إدارة الحالة")}</button></td></tr>`)):empty(tr("ابدأ بأول شركة"),tr("أنشئ مساحة وحساب مدير، ثم أكمل التجهيز.")));document.querySelector('#add-tenant').onclick=()=>modal(tr("شركة جديدة"),field('name',tr("اسم الشركة"))+field('owner',tr("اسم مدير الشركة"))+field('email',tr("بريد المدير"),'email')+field('password',tr("كلمة مرور أولية — 12 حرفًا على الأقل"),'password')+tMarkup("<p class=\"full micro\">سلّم بيانات الدخول بطريقة آمنة. يستطيع المدير تغيير كلمة المرور من إعدادات الحساب.</p>"),d=>send('/admin/tenants','POST',d));wireRows('data-tenant',id=>modal(tr("حالة الشركة"),select('status',tr("الحالة"),['setup','active','suspended'],data.find(t=>t.id===id).status),d=>send('/admin/tenants/'+id,'PATCH',d)))}

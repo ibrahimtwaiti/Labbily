@@ -145,8 +145,12 @@ async function agentStudioView(main,selected=null,tab='build'){
 
 function addInboxControls(main,data,views,list,open){
  const toolbar=main.querySelector('.service-toolbar');
- const controls=document.createElement('div');controls.className='service-toolbar inbox-filters';toolbar.after(controls);
- const widths=document.createElement('details');widths.className='inbox-widths';widths.innerHTML='<summary>'+sv('عرض الأعمدة','Column widths')+'</summary><label>'+sv('القائمة','List')+'<input type="range" min="170" max="320" value="225" name="list"></label><label>'+sv('ملف العميل','Customer profile')+'<input type="range" min="155" max="260" value="195" name="profile"></label>';toolbar.after(widths);
+ const advanced=document.createElement('details');
+ advanced.className='inbox-options';
+ advanced.innerHTML='<summary>'+sv('فلاتر المحادثات','Conversation filters')+'</summary>';
+ toolbar.append(advanced);
+ const controls=document.createElement('div');controls.className='service-toolbar inbox-filters';advanced.append(controls);
+ const widths=document.createElement('details');widths.className='inbox-widths';widths.innerHTML='<summary>'+sv('عرض الأعمدة','Column widths')+'</summary><label>'+sv('القائمة','List')+'<input type="range" min="170" max="320" value="225" name="list"></label><label>'+sv('ملف العميل','Customer profile')+'<input type="range" min="155" max="260" value="195" name="profile"></label>';advanced.append(widths);
  for(const range of widths.querySelectorAll('input')){const key='labbily-inbox-'+range.name;try{range.value=localStorage.getItem(key)||range.value}catch{}const resize=()=>main.querySelector('.service-workspace').style.setProperty('--inbox-'+range.name,Number(range.value)+'px');resize();range.oninput=()=>{resize();try{localStorage.setItem(key,range.value)}catch{}}}
  const scopeOptions=[['all',sv('الكل','All')],['mine',sv('محادثاتي','Mine')],['unread',sv('غير مقروء','Unread')],['unassigned',sv('غير مسند','Unassigned')],['human',sv('للموظفين','Human-owned')],['snoozed',sv('مؤجل','Snoozed')]];
  controls.innerHTML=select('scope',sv('العرض','View'),scopeOptions)+field('team_filter',sv('اسم الفريق','Team name'),'text','',false)+select('order',sv('الترتيب','Sort'),[['recent',sv('الأحدث','Newest first')],['oldest',sv('الأقدم','Oldest first')]])+select('saved_view',sv('فلاتري','My filters'),[['','—'],...views.map(v=>[v.id,v.name])])+studioButton('save-inbox-view',sv('حفظ الفلتر','Save filter'))+(me.role!=='sales'?studioButton('inbox-bulk',sv('إجراء جماعي','Bulk action')):'');
