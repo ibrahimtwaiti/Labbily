@@ -113,6 +113,7 @@ def render_variables(db,t,account,answer):
 
 def deployment(db,tid,account):
     return one(db,'''SELECT d.mode,a.id,a.published,v.config FROM agent_deployments d
+      JOIN service_accounts ch ON ch.id=d.account_id AND ch.ai_paused=0
       JOIN ai_agents a ON a.id=d.agent_id AND a.tenant_id=d.tenant_id
       JOIN agent_versions v ON v.agent_id=a.id AND v.version=a.published
       WHERE d.tenant_id=? AND d.account_id=? AND a.state='published' ''',(tid,account))

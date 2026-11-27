@@ -6,8 +6,9 @@ import json
 import os
 import re
 import time
+from typing import Literal
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from .db import transaction, one, rows, audit, now, uid, postgres
 from .main import user, text, choice, operation, assignee
@@ -117,7 +118,9 @@ async def receive(channel:str,request:Request):
     return {'received':True,'events':count}
 
 @router.get('/api/v2/tickets')
-def tickets(q:str='',status:str='',channel:str='',u=Depends(user)):
+def tickets(q:str='', status:str='', channel:str='', scope:Literal['all','mine','unread','unassigned','human','snoozed']='all',
+            team:str=Query('',max_length=120), order:Literal['recent','oldest']='recent',
+            before:str=Query('',max_length=110), limit:int=Query(200,ge=1,le=200), u=Depends(user)):
     permit(u,'inbox')
     sql='''SELECT t.*,i.name,i.provider_user_id,a.channel,a.label account_label,
         (SELECT COUNT(*) FROM service_messages m WHERE m.ticket_id=t.id AND m.direction='in')-COALESCE((SELECT seen_count FROM inbox_seen WHERE ticket_id=t.id AND user_id=?),0) AS unread_count,
@@ -127,7 +130,25 @@ def tickets(q:str='',status:str='',channel:str='',u=Depends(user)):
     if u['role']=='sales': sql+=' AND t.assignee_id=?'; args.append(u['id'])
     if status: sql+=' AND t.status=?'; args.append(status)
     if channel: sql+=' AND a.channel=?'; args.append(channel)
-    sql+=' AND (i.name LIKE ? OR i.provider_user_id LIKE ?) ORDER BY t.updated_at DESC LIMIT 200'; args+=['%'+q[:100]+'%']*2
+    if scope=='mine': sql+=' AND t.assignee_id=?'; args.append(u['id'])
+    if scope=='unassigned': sql+=' AND t.assignee_id IS NULL'
+    if scope=='human': sql+=' AND t.automation_paused=1'
+    if scope=='snoozed': sql+=' AND t.snoozed_until>?'; args.append(int(time.time()))
+    if team: sql+=' AND t.team=?'; args.append(team)
+    if q:
+        pattern='%'+q[:100].lower().replace('!','!!').replace('%','!%').replace('_','!_')+'%'
+        sql+=" AND (LOWER(i.name) LIKE ? ESCAPE '!' OR LOWER(i.provider_user_id) LIKE ? ESCAPE '!')"
+        args.extend([pattern,pattern])
+    if before:
+        stamp, sep, ident=before.partition('|')
+        if not sep or not ident or not re.fullmatch(r'[0-9]{1,16}',stamp):
+            raise HTTPException(422,'invalid_cursor')
+        sql+=' AND (t.updated_at,t.id)'+('>' if order=='oldest' else '<')+'(?,?)'
+        args.extend([int(stamp),ident])
+    sql='SELECT * FROM ('+sql+') AS matching_tickets'
+    if scope=='unread': sql+=' WHERE unread_count>0'
+    sql+=' ORDER BY updated_at ASC,id ASC' if order=='oldest' else ' ORDER BY updated_at DESC,id DESC'
+    sql+=' LIMIT ?'; args.append(limit)
     with transaction() as db: return rows(db,sql,args)
 
 @router.get('/api/v2/tickets/{ident}')
@@ -142,7 +163,7 @@ def ticket(ident:str,u=Depends(user)):
         t['reply_window_open']=int(time.time())-t['last_customer_at']<86400
         t['attachments']=rows(db,'SELECT id,mime_type,size_bytes,scan_state FROM service_media WHERE ticket_id=? AND tenant_id=?',(ident,u['tenant_id']))
         t['consents']=rows(db,'SELECT * FROM service_consents WHERE identity_id=? AND tenant_id=?',(t['identity_id'],u['tenant_id']))
-        t['contact']=one(db,'SELECT c.id,c.name,c.phone,c.tags FROM contacts c WHERE c.id=? AND c.tenant_id=?',(t['identity'].get('customer_id'),u['tenant_id']))
+        t['contact']=one(db,"SELECT c.id,c.name,c.phone,c.tags,COALESCE(s.name,p.stage,'new') stage FROM contacts c LEFT JOIN contact_profiles p ON p.contact_id=c.id LEFT JOIN contact_stages s ON s.id=p.stage AND s.tenant_id=c.tenant_id WHERE c.id=? AND c.tenant_id=?",(t['identity'].get('customer_id'),u['tenant_id']))
         t['linked_tasks']=rows(db,'SELECT k.title,k.status,k.due_at FROM agent_runs r JOIN tasks k ON k.id=r.task_id AND k.tenant_id=r.tenant_id WHERE r.ticket_id=? AND r.tenant_id=? ORDER BY k.created_at DESC LIMIT 20',(ident,u['tenant_id']))
         return t
 
@@ -173,6 +194,11 @@ def update_ticket(ident:str,data:dict,u=Depends(user)):
         followup=data.get('followup_at',t.get('followup_at'))
         if followup is not None and (type(followup) is not int or not 0<=followup<=4102444800):raise HTTPException(422,'invalid_followup_at')
         db.execute('UPDATE service_tickets SET next_action=?,followup_at=?,campaign=? WHERE id=?',(text({**t,**data},'next_action',0,1000),followup,text({**t,**data},'campaign',0,120),ident))
+        from .flow_runtime import stop_ticket_runs, trigger
+        if owner or status in ('closed','resolved'):stop_ticket_runs(db,ident,'ticket_updated')
+        closed={'closed','resolved'}
+        if (status in closed)!=(t['status'] in closed):
+            trigger(db,u['tenant_id'],ident,'closed' if status in closed else 'opened','status-'+str(t['version']+1))
         audit(db,u,'service.ticket.updated',ident,status)
     return {'ok':True,'version':t['version']+1}
 
@@ -206,6 +232,8 @@ def enqueue(ident:str,data:dict,request:Request,u=Depends(user)):
         db.execute('INSERT INTO service_outbox(id,tenant_id,message_id,request_key,payload_hash,payload,state,created_at) VALUES(?,?,?,?,?,?,?,?)',
             (uid(),u['tenant_id'],mid,key,fingerprint,json.dumps(p),'queued' if direction=='out' else 'internal',stamp))
         db.execute('UPDATE service_tickets SET version=version+1,automation_paused=1,updated_at=? WHERE id=?',(stamp,ident))
+        from .flow_runtime import stop_ticket_runs
+        stop_ticket_runs(db,ident,'human_reply')
         if direction=='note':
             mentioned=data.get('mention_id')
             if mentioned:

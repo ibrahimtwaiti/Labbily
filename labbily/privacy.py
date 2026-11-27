@@ -180,7 +180,7 @@ def purge(db,job,targets):
         if not changed:continue
         if entries:db.execute('UPDATE webhook_events SET payload=? WHERE id=?',(json.dumps({**payload,'entry':entries}),e['id']))
         else:remove(db,'webhook_events','id',[e['id']])
-    for table in ['messages','conversations','opportunities','tasks','contacts','channels','service_replies','service_settings','service_retention_policy','service_sandbox_invoices','service_usage_counters','service_subscriptions','service_registrations','meta_api_usage','meta_signup_sessions','meta_page_sessions','meta_data_sessions','meta_business_accounts']:
+    for table in ['messages','conversations','opportunities','tasks','contacts','contact_stages','contact_segments','channels','service_replies','service_settings','service_retention_policy','service_sandbox_invoices','service_usage_counters','service_subscriptions','service_registrations','meta_api_usage','meta_signup_sessions','meta_page_sessions','meta_data_sessions','meta_business_accounts']:
         remove(db,table,'tenant_id',[tid])
     remove(db,'service_oauth_states','user_id',ids)
     db.execute('UPDATE audit SET actor_id=NULL,detail=? WHERE actor_id IN ('+marks(ids)+')',('',*ids)) if ids else None

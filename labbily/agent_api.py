@@ -235,6 +235,7 @@ def deploy(ident:str,data:Deployment,u=Depends(user)):
     manager(u)
     with transaction() as db:
         a=get(db,'ai_agents',ident,u,True);account=get(db,'service_accounts',data.account_id,u,True)
+        if account['ai_paused']:raise HTTPException(409,'channel_ai_paused')
         if a['state']!='published' or not engine.limits(db,u['tenant_id'])['live_enabled']: raise HTTPException(409,'live_deployment_disabled')
         if account['state']!='verified' or account['channel'] not in ('whatsapp','instagram','messenger'): raise HTTPException(409,'verified_account_required')
         old=one(db,'SELECT agent_id FROM agent_deployments WHERE account_id=?',(account['id'],))
@@ -253,11 +254,17 @@ def undeploy(ident:str,account_id:str,u=Depends(user)):
         audit(db,u,'agent.undeployed',ident)
     return {'ok':True}
 
+def channel_ai_paused(db,ticket):
+    return one(db,"""SELECT a.id FROM service_accounts a JOIN service_identities i ON i.account_id=a.id
+                     WHERE i.id=? AND a.tenant_id=? AND a.ai_paused=1""",(ticket['identity_id'],ticket['tenant_id']))
+
+
 @router.get('/api/v2/tickets/{ident}/copilot')
 def available_agents(ident:str,u=Depends(user)):
     permit(u,'inbox')
     with transaction() as db:
-        get(db,'service_tickets',ident,u)
+        t=get(db,'service_tickets',ident,u)
+        if channel_ai_paused(db,t):return []
         return rows(db,"SELECT id,name FROM ai_agents WHERE tenant_id=? AND state='published' ORDER BY name",(u['tenant_id'],))
 
 @router.post('/api/v2/tickets/{ident}/copilot')
@@ -267,6 +274,7 @@ def copilot(ident:str,data:Assist,u=Depends(user)):
     remote=data.operation!='draft'
     with transaction() as db:
         t=get(db,'service_tickets',ident,u)
+        if channel_ai_paused(db,t):raise HTTPException(409,'channel_ai_paused')
         a=get(db,'ai_agents',data.agent_id,u)
         if a['state']!='published': raise HTTPException(409,'published_agent_required')
         cfg=json.loads(one(db,'SELECT config FROM agent_versions WHERE agent_id=? AND version=?',(a['id'],a['published']))['config'])

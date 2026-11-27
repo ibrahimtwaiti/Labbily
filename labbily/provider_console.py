@@ -122,6 +122,16 @@ def edit(tenant_id:str,ident:str,data:dict,u=Depends(user)):
         a=get(db,'service_accounts',ident,delegate,True)
         if a['state']=='disconnected' and (encrypted or version!=a['api_version']):capacity(db,tenant_id,'channel',a['channel'])
         db.execute('UPDATE service_accounts SET label=?,api_version=? WHERE id=?',(label,version,ident))
+        if 'ai_paused' in data:
+            paused=data['ai_paused']
+            if type(paused) is not bool:raise HTTPException(422,'invalid_channel_ai_policy')
+            if int(paused)!=a['ai_paused']:
+                db.execute('UPDATE service_accounts SET ai_paused=? WHERE id=?',(int(paused),ident))
+                if paused:
+                    # Invalidate outstanding model tasks and automatic replies, including after re-enabling.
+                    db.execute("""UPDATE service_tickets SET version=version+1 WHERE tenant_id=? AND identity_id IN
+                               (SELECT id FROM service_identities WHERE account_id=? AND tenant_id=?)""",(tenant_id,ident,tenant_id))
+                audit(db,u,'provider.integration.channel_ai',ident,'paused' if paused else 'enabled')
         if encrypted:
             db.execute('INSERT INTO service_secrets VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET ciphertext=excluded.ciphertext,issued_at=excluded.issued_at',(ident,encrypted,int(time.time())))
             db.execute("UPDATE service_accounts SET token_ref=?,state='unverified',checked_at=NULL,expires_at=NULL WHERE id=?",('vault:'+ident,ident))

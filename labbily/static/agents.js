@@ -22,7 +22,7 @@ function renderCustomerContext(main,t){
  panel.hidden=false;
  panel.innerHTML=`<details open><summary>${sv('ملف العميل','Customer profile')}</summary><h3 dir="auto">${esc(contact?.name||identity.name)}</h3>
  <dl><dt>${sv('القناة','Channel')}</dt><dd>${esc(t.account.label||t.account.channel)}</dd><dt>${sv('الهوية على القناة','Channel identity')}</dt><dd><bdi>${esc(identity.provider_user_id)}</bdi></dd>
- ${contact?`<dt>${sv('هاتف موثق','Verified phone')}</dt><dd><bdi>${esc(contact.phone)}</bdi></dd><dt>${sv('التصنيفات','Tags')}</dt><dd>${esc(contact.tags||'—')}</dd>`:''}
+ ${contact?`<dt>${sv('مرحلة العميل','Customer stage')}</dt><dd>${esc(({new:sv('جديد','New'),interested:sv('مهتم','Interested'),payment:sv('بانتظار الدفع','Awaiting payment'),customer:sv('عميل','Customer'),uninterested:sv('غير مهتم','Not interested')})[contact.stage]||contact.stage)}</dd><dt>${sv('رقم التواصل','Phone')}</dt><dd><bdi>${esc(contact.phone)}</bdi></dd><dt>${sv('التصنيفات','Tags')}</dt><dd>${esc(contact.tags||'—')}</dd>`:''}
  <dt>${sv('الفريق','Team')}</dt><dd>${esc(t.team||'—')}</dd></dl>${t.summary?`<p dir="auto">${esc(t.summary)}</p>`:''}
  ${(t.linked_tasks||[]).map(x=>`<p>${esc(x.title)} · ${esc(x.status)}</p>`).join('')}</details><details id="contact-history"><summary>${sv('سجل المحادثات المرتبطة','Linked conversation history')}</summary><div role="status"></div></details>`;
  const history=panel.querySelector('#contact-history');
@@ -80,8 +80,24 @@ async function agentStudioView(main,selected=null,tab='build'){
  const click=(id,fn)=>{main.querySelector('#'+id).onclick=studioActions(main,fn)};
  click('agent-new',async()=>{
   const root=main.querySelector('#agent-body');
-  root.innerHTML=`<h2>${sv('وكيل جديد','New agent')}</h2>`+studioForm('create-agent',field('name',sv('اسم الوكيل','Agent name'))+area('instructions',sv('تعليمات الصياغة','Editorial instructions'),'',false),sv('إنشاء المسودة','Create draft'));
-  bindForm(root.querySelector('form'),async d=>{const r=await send('/v2/agents','POST',d);await refresh(r.id,'build')});
+  if(flushBuild){await flushBuild();flushBuild=null}
+  const presets={
+   reception:{name:sv('وكيل الاستقبال','Reception agent'),tone:'friendly',
+    instructions:sv('رحّب بالعميل واسأله عن سبب تواصله، ثم وجّهه إلى الفريق المناسب.','Welcome the customer, ask what they need and route them to the appropriate team.'),terms:['موظف استقبال','receptionist']},
+   sales:{name:sv('وكيل المبيعات','Sales agent'),tone:'professional',
+    instructions:sv('استوضح احتياج العميل وأجب من المعرفة المعتمدة. حوّل طلب عرض السعر إلى موظف المبيعات.','Clarify the customer’s needs and use approved knowledge. Hand quotation requests to sales.'),terms:['عرض سعر','quotation']},
+   support:{name:sv('وكيل الدعم','Support agent'),tone:'concise',
+    instructions:sv('اسأل عن المشكلة وخطوات حدوثها. استخدم الحلول المعتمدة وحوّل الشكاوى إلى موظف.','Ask what happened and how to reproduce the issue. Use approved solutions and hand complaints to a person.'),terms:['شكوى','complaint']}
+  };
+  root.innerHTML='<h2>'+sv('وكيل جديد','New agent')+'</h2>'+studioForm('create-agent',
+   select('preset',sv('قالب البداية','Starting template'),[['',sv('مسودة فارغة','Blank draft')],...Object.entries(presets).map(([key,p])=>[key,p.name])])+
+   field('name',sv('اسم الوكيل','Agent name'))+area('instructions',sv('تعليمات الصياغة','Editorial instructions'),'',false),sv('إنشاء المسودة','Create draft'));
+  const form=root.querySelector('form');
+  form.elements.preset.onchange=()=>{const p=presets[form.elements.preset.value];form.elements.name.value=p?.name||'';form.elements.instructions.value=p?.instructions||''};
+  bindForm(form,async ({preset,name,instructions})=>{
+   const p=presets[preset],draft={name,instructions,tone:p?.tone||'professional',handover_terms:p?.terms||[]};
+   const r=await send('/v2/agents','POST',draft);await refresh(r.id,'build')
+  });
  });
  for(const el of main.querySelectorAll('[data-agent]'))el.onclick=studioActions(main,()=>refresh(el.dataset.agent,'build'));
  const root=main.querySelector('#agent-body');
@@ -127,20 +143,19 @@ async function agentStudioView(main,selected=null,tab='build'){
  }
 }
 
-function scopeMatches(t,scope){
- return scope==='all'||(scope==='unread'&&t.unread_count>0)||(scope==='unassigned'&&!t.assignee_id)||(scope==='human'&&t.automation_paused)||(scope==='snoozed'&&t.snoozed_until>Date.now()/1000)
-}
 function addInboxControls(main,data,views,list,open){
  const toolbar=main.querySelector('.service-toolbar');
  const controls=document.createElement('div');controls.className='service-toolbar inbox-filters';toolbar.after(controls);
  const widths=document.createElement('details');widths.className='inbox-widths';widths.innerHTML='<summary>'+sv('عرض الأعمدة','Column widths')+'</summary><label>'+sv('القائمة','List')+'<input type="range" min="170" max="320" value="225" name="list"></label><label>'+sv('ملف العميل','Customer profile')+'<input type="range" min="155" max="260" value="195" name="profile"></label>';toolbar.after(widths);
  for(const range of widths.querySelectorAll('input')){const key='labbily-inbox-'+range.name;try{range.value=localStorage.getItem(key)||range.value}catch{}const resize=()=>main.querySelector('.service-workspace').style.setProperty('--inbox-'+range.name,Number(range.value)+'px');resize();range.oninput=()=>{resize();try{localStorage.setItem(key,range.value)}catch{}}}
- const scopeOptions=[['all',sv('الكل','All')],['unread',sv('غير مقروء','Unread')],['unassigned',sv('غير مسند','Unassigned')],['human',sv('للموظفين','Human-owned')],['snoozed',sv('مؤجل','Snoozed')]];
- controls.innerHTML=select('scope',sv('العرض','View'),scopeOptions)+select('saved_view',sv('فلاتري','My filters'),[['','—'],...views.map(v=>[v.id,v.name])])+studioButton('save-inbox-view',sv('حفظ الفلتر','Save filter'))+(me.role!=='sales'?studioButton('inbox-bulk',sv('إجراء جماعي','Bulk action')):'');
+ const scopeOptions=[['all',sv('الكل','All')],['mine',sv('محادثاتي','Mine')],['unread',sv('غير مقروء','Unread')],['unassigned',sv('غير مسند','Unassigned')],['human',sv('للموظفين','Human-owned')],['snoozed',sv('مؤجل','Snoozed')]];
+ controls.innerHTML=select('scope',sv('العرض','View'),scopeOptions)+field('team_filter',sv('اسم الفريق','Team name'),'text','',false)+select('order',sv('الترتيب','Sort'),[['recent',sv('الأحدث','Newest first')],['oldest',sv('الأقدم','Oldest first')]])+select('saved_view',sv('فلاتري','My filters'),[['','—'],...views.map(v=>[v.id,v.name])])+studioButton('save-inbox-view',sv('حفظ الفلتر','Save filter'))+(me.role!=='sales'?studioButton('inbox-bulk',sv('إجراء جماعي','Bulk action')):'');
  main.querySelector('#service-search').oninput=list;main.querySelector('#service-state').onchange=list;
  const scope=controls.querySelector('[name=scope]'),saved=controls.querySelector('[name=saved_view]');scope.onchange=list;
- saved.onchange=()=>{const v=views.find(v=>v.id===saved.value);if(v){main.querySelector('#service-search').value=v.criteria.query;main.querySelector('#service-state').value=v.criteria.status;scope.value=v.criteria.scope;list()}};
- controls.querySelector('#save-inbox-view').onclick=()=>modal(sv('حفظ فلتر','Save filter'),field('name',sv('اسم الفلتر','Filter name')),d=>send('/v2/inbox-views','POST',{name:d.name,criteria:{scope:scope.value,status:main.querySelector('#service-state').value,query:main.querySelector('#service-search').value}}));
+ const team=controls.querySelector('[name=team_filter]'),order=controls.querySelector('[name=order]');
+ team.maxLength=120;team.oninput=list;order.onchange=list;
+ saved.onchange=()=>{const v=views.find(v=>v.id===saved.value);if(v){main.querySelector('#service-search').value=v.criteria.query;main.querySelector('#service-state').value=v.criteria.status;scope.value=v.criteria.scope;team.value=v.criteria.team||'';order.value=v.criteria.order||'recent';list()}};
+ controls.querySelector('#save-inbox-view').onclick=()=>modal(sv('حفظ فلتر','Save filter'),field('name',sv('اسم الفلتر','Filter name')),d=>send('/v2/inbox-views','POST',{name:d.name,criteria:{scope:scope.value,team:team.value.trim(),order:order.value,status:main.querySelector('#service-state').value,query:main.querySelector('#service-search').value}}));
  if(controls.querySelector('#inbox-bulk'))controls.querySelector('#inbox-bulk').onclick=()=>{
   const visible=[...main.querySelectorAll('.service-ticket')].map(x=>data.find(t=>t.id===x.dataset.ticket)).slice(0,50);
   if(!visible.length)return;

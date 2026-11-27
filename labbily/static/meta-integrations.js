@@ -10,6 +10,54 @@ function metaSdk(appId,version){
  });
  return withLoading(()=>metaSdkPromise);
 }
+function whatsappSetup(section, readiness) {
+ const accounts=readiness.connections;
+ const panel=document.createElement('section');
+ panel.className='wa-setup';panel.setAttribute('aria-label',sv('خطوات إعداد واتساب','WhatsApp setup steps'));
+ section.querySelector('h2').after(panel);
+ panel.innerHTML=(accounts.length>1?select('setup_account',sv('رقم واتساب','WhatsApp number'),accounts.map(a=>[a.account_id,a.label+' · '+a.phone_number_id])):'')+
+   '<div class="wa-progress" aria-live="polite"></div><ol></ol>';
+ const picker=panel.querySelector('select');
+ function show() {
+   const a=picker?accounts.find(item=>item.account_id===picker.value):accounts[0];
+   const valid=!!a && a.token_health==='valid' && !['disconnected','reauthorize'].includes(a.state) &&
+     (!a.expires_at||a.expires_at>Date.now()/1000);
+   const observed=stamp=>Boolean(valid&&stamp&&a.connected_at&&Date.parse(stamp)>=Date.parse(a.connected_at));
+   const steps=[
+     [sv('تفويض رقم واتساب','Authorize the phone number'),valid,'#meta-prepare'],
+     [sv('تسجيل الرقم لدى Meta','Register the number with Meta'),valid&&a.registration_state==='registered','metaRegister'],
+     [sv('اشتراك أحداث الرسائل','Subscribe to message events'),valid&&a.subscription_state==='subscribed','metaSubscribe'],
+     [sv('استقبال رسالة اختبار','Receive a test message'),observed(a?.last_inbound_at)],
+     [sv('قبول رد تجريبي لدى المزود','Get a test reply accepted by the provider'),observed(a?.last_outbound_at)]
+   ];
+   const next=steps.findIndex(s=>!s[1]),count=steps.filter(s=>s[1]).length;
+   panel.querySelector('.wa-progress').textContent=sv('خطوات مكتملة','Steps completed')+' · '+count+' / '+steps.length;
+   const list=panel.querySelector('ol');list.replaceChildren();
+   for(const [i,[label,done,action]] of steps.entries()){
+     const item=document.createElement('li');item.dataset.done=String(done);if(i===next)item.setAttribute('aria-current','step');
+     const name=document.createElement('strong'),state=document.createElement('small');name.textContent=label;
+     state.textContent=done?sv('مكتمل','Complete'):i!==next?sv('قيد الانتظار','Pending'):!valid&&!readiness.signup_available?
+       sv('يحتاج إعداد مزود الخدمة','Provider setup required'):sv('الخطوة التالية','Next step');
+     item.append(name,state);list.append(item);
+     if(i!==next)continue;
+     if(action){
+       const target=action==='#meta-prepare'?section.querySelector(action):
+         [...section.querySelectorAll('button')].find(b=>b.dataset[action]===a?.account_id);
+       if(target&&!target.disabled&&readiness.signup_available){
+         const button=document.createElement('button');button.type='button';button.className='light small';
+         button.textContent=sv('متابعة','Continue');button.onclick=()=>target.click();item.append(button);
+       }
+     }else{
+       const detail=document.createElement('p');
+       if(i===3)detail.textContent=sv('أرسل رسالة من هاتف الاختبار إلى هذا الرقم، ثم حدّث صفحة القنوات.','Send a message from the test handset to this number, then refresh Channels.');
+       else {const link=document.createElement('a');link.href='/app/inbox';link.textContent=sv('فتح المحادثة التجريبية في الوارد','Open the test conversation in the inbox');detail.append(link)}
+       item.append(detail);
+     }
+   }
+ }
+ if(picker)picker.onchange=show;show();
+}
+
 const originalChannelsView=channelsView;
 channelsView=async function(main){
  await originalChannelsView(main);
@@ -20,6 +68,7 @@ channelsView=async function(main){
  `<h3>${sv('استخدام بوابة Meta خلال 30 يومًا','Meta gateway usage over 30 days')}</h3><p class="micro">${sv('تشمل هذه الأعداد الربط وطلبات بوابة الرسائل والأصول. لا تمثل كشف رسوم Meta.','Counts cover onboarding and the messaging/asset gateway. They are not a Meta billing statement.')}</p>`+
  (usage.totals.length?table([sv('العملية','Operation'),sv('الطلبات','Requests'),sv('نجاح','Successful'),sv('فشل','Failed')],usage.totals.map(x=>`<tr><td>${esc(x.operation)}</td><td>${x.requests}</td><td>${x.successful}</td><td>${x.failed}</td></tr>`)):empty(sv('لا توجد عمليات ربط مسجلة','No onboarding operations recorded')));
  main.prepend(section);
+ whatsappSetup(section,r);
  const status=section.querySelector('#meta-status'),prepare=section.querySelector('#meta-prepare'),launch=section.querySelector('#meta-launch');
  const add=document.querySelector('#service-add');if(add)add.onclick=()=>section.scrollIntoView({behavior:'smooth'});
  let pending=null,listener=null,timer=null;

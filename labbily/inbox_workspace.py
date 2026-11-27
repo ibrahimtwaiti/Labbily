@@ -12,7 +12,9 @@ from .service_api import get, router
 class Criteria(Input):
     query:str=Field(default='',max_length=100)
     status:str=Field(default='',max_length=30)
-    scope:Literal['all','unread','unassigned','human','snoozed']='all'
+    order:Literal['recent','oldest']='recent'
+    team:str=Field(default='',max_length=120)
+    scope:Literal['all','mine','unread','unassigned','human','snoozed']='all'
 
 class View(Input):
     name:Tiny
@@ -85,6 +87,12 @@ def update(data:Change,u=Depends(user)):
             else:
                 db.execute('UPDATE service_tickets SET snoozed_until=? WHERE id=?',(data.until if data.action=='snooze' else 0,item.id))
             db.execute('UPDATE service_tickets SET version=version+1,updated_at=? WHERE id=?',(clock,item.id))
+            if data.action in ('take','close','snooze'):
+                from .flow_runtime import stop_ticket_runs
+                stop_ticket_runs(db,item.id,'human_control')
+            if data.action=='close' and t['status'] not in ('closed','resolved'):
+                from .flow_runtime import trigger
+                trigger(db,u['tenant_id'],item.id,'closed','status-'+str(item.version+1))
             audit(db,u,'inbox.'+data.action,item.id)
     return {'updated':len(data.tickets)}
 
