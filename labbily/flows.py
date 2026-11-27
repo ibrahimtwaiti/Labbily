@@ -10,7 +10,7 @@ from .db import audit, rows, transaction, uid
 from .main import operation, user
 from .service_api import get, router
 
-Trigger = Literal['manual','opened','closed','field_changed','stage_changed']
+Trigger = Literal['manual','opened','closed','field_changed','stage_changed','contact_created']
 Action = Literal['message','question','assign','condition','tag','stage','wait','close']
 MATCH = {'channel','team','priority','status','language','office_hours'}
 
@@ -34,7 +34,10 @@ class Flow(Input):
             action, value = step.action, step.value.strip()
             if not value or (action == 'wait' and not (value.isascii() and value.isdecimal() and len(value)<=5 and 1<=int(value)<=10080)):
                 raise ValueError('invalid_step_value')
-            if action == 'condition' and (step.field not in MATCH or not index+1 < step.otherwise <= len(self.steps)+1):
+            if self.trigger=='contact_created' and action not in ('condition','tag','stage'):
+                raise ValueError('contact_creation_supports_condition_tag_stage')
+            fields={'source'} if self.trigger=='contact_created' else MATCH
+            if action == 'condition' and (step.field not in fields or not index+1 < step.otherwise <= len(self.steps)+1):
                 raise ValueError('branch_must_point_forward')
             if action in ('assign','tag','stage','close') and len(value)>80:
                 raise ValueError('step_value_too_long')
@@ -46,6 +49,7 @@ class Revision(Input):
 
 
 class Simulation(Revision):
+    source: Literal['manual','import','channel']='manual'
     channel: Literal['whatsapp','messenger','instagram']='whatsapp'
     team: str='support'
     priority: str='normal'
@@ -69,6 +73,8 @@ def detail(ident:str,u=Depends(user)):
         flow['draft']=json.loads(flow['draft'])
         flow.pop('published')
         flow['runs']=rows(db,'SELECT id,position,state,detail,created_at,revision FROM workspace_flow_runs WHERE flow_id=? ORDER BY created_at DESC,id DESC LIMIT 30',(ident,))
+        contact_runs=rows(db,"SELECT contact_id id,position,revision,created_at,state,detail FROM contact_creation_runs WHERE flow_id=? ORDER BY created_at DESC,contact_id DESC LIMIT 30",(ident,))
+        flow['runs']=sorted(flow['runs']+contact_runs,key=lambda r:(r['created_at'],r['id']),reverse=True)[:30]
         return flow
 
 

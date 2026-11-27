@@ -7,6 +7,7 @@ for(const lang of ['ar','en']){
     await page.locator('button[type=submit]').click();
     await page.waitForURL('**/app');
     await page.goto('/app/workflows?lang='+lang);
+    await page.locator('#new-flow').click();
     const form=page.locator('#flow-form');
     await form.locator('[name=template]').selectOption('1');
     await expect(form.locator('.flow-node')).toHaveCount(2);

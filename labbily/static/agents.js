@@ -69,6 +69,17 @@ async function agentPolicyView(main){
   }catch(e){root.textContent=serviceError(e)}
  };
 }
+const agentPresets={
+   reception:{name:sv('وكيل الاستقبال','Reception agent'),tone:'friendly',
+    instructions:sv('رحّب بالعميل واسأله عن سبب تواصله، ثم وجّهه إلى الفريق المناسب.','Welcome the customer, ask what they need and route them to the appropriate team.'),terms:['موظف استقبال','receptionist']},
+   sales:{name:sv('وكيل المبيعات','Sales agent'),tone:'professional',
+    instructions:sv('استوضح احتياج العميل وأجب من المعرفة المعتمدة. حوّل طلب عرض السعر إلى موظف المبيعات.','Clarify the customer’s needs and use approved knowledge. Hand quotation requests to sales.'),terms:['عرض سعر','quotation']},
+   support:{name:sv('وكيل الدعم','Support agent'),tone:'concise',
+    instructions:sv('اسأل عن المشكلة وخطوات حدوثها. استخدم الحلول المعتمدة وحوّل الشكاوى إلى موظف.','Ask what happened and how to reproduce the issue. Use approved solutions and hand complaints to a person.'),terms:['شكوى','complaint']},
+   booking:{name:sv('منسّق المواعيد','Appointment coordinator'),tone:'professional',instructions:sv('اسأل عن الموعد المفضل والمنطقة الزمنية. اعرض المواعيد الموثقة فقط، وحوّل تأكيد الحجز أو تغييره إلى الفريق.','Ask for the preferred time and timezone. Offer only verified availability and hand booking confirmations or changes to the team.'),terms:['تأكيد حجز','confirm booking']},
+   orders:{name:sv('متابع الطلبات','Order follow-up'),tone:'concise',instructions:sv('اطلب مرجع الطلب وتحقق من سياسة الخصوصية. استخدم الحالة الموثقة وحوّل طلبات الاسترجاع إلى الموظف المختص.','Request the order reference and follow the privacy policy. Use the verified order status and route return requests to staff.'),terms:['استرجاع','refund']},
+   faq:{name:sv('دليل الخدمات','Service guide'),tone:'friendly',instructions:sv('أجب عن أسئلة الخدمات من قاعدة المعرفة المعتمدة. اطلب توضيحًا للسؤال المبهم وحوّل الأسئلة غير الموثقة إلى الفريق.','Answer service questions from approved knowledge. Clarify ambiguous questions and refer undocumented answers to staff.'),terms:['تواصل مع الفريق','contact the team']}
+  };
 async function agentStudioView(main,selected=null,tab='build'){
  const list=await api('/v2/agents');
  const a=selected?await api('/v2/agents/'+selected):null;
@@ -78,30 +89,39 @@ async function agentStudioView(main,selected=null,tab='build'){
  let flushBuild=null;
  const refresh=async(id=selected,key=tab)=>{if(flushBuild)await flushBuild();await agentStudioView(main,id,key)};
  const click=(id,fn)=>{main.querySelector('#'+id).onclick=studioActions(main,fn)};
- click('agent-new',async()=>{
+ async function createAgent(preset=''){
   const root=main.querySelector('#agent-body');
   if(flushBuild){await flushBuild();flushBuild=null}
-  const presets={
-   reception:{name:sv('وكيل الاستقبال','Reception agent'),tone:'friendly',
-    instructions:sv('رحّب بالعميل واسأله عن سبب تواصله، ثم وجّهه إلى الفريق المناسب.','Welcome the customer, ask what they need and route them to the appropriate team.'),terms:['موظف استقبال','receptionist']},
-   sales:{name:sv('وكيل المبيعات','Sales agent'),tone:'professional',
-    instructions:sv('استوضح احتياج العميل وأجب من المعرفة المعتمدة. حوّل طلب عرض السعر إلى موظف المبيعات.','Clarify the customer’s needs and use approved knowledge. Hand quotation requests to sales.'),terms:['عرض سعر','quotation']},
-   support:{name:sv('وكيل الدعم','Support agent'),tone:'concise',
-    instructions:sv('اسأل عن المشكلة وخطوات حدوثها. استخدم الحلول المعتمدة وحوّل الشكاوى إلى موظف.','Ask what happened and how to reproduce the issue. Use approved solutions and hand complaints to a person.'),terms:['شكوى','complaint']}
-  };
   root.innerHTML='<h2>'+sv('وكيل جديد','New agent')+'</h2>'+studioForm('create-agent',
-   select('preset',sv('قالب البداية','Starting template'),[['',sv('مسودة فارغة','Blank draft')],...Object.entries(presets).map(([key,p])=>[key,p.name])])+
+   select('preset',sv('قالب البداية','Starting template'),[['',sv('مسودة فارغة','Blank draft')],...Object.entries(agentPresets).map(([key,p])=>[key,p.name])])+
    field('name',sv('اسم الوكيل','Agent name'))+area('instructions',sv('تعليمات الصياغة','Editorial instructions'),'',false),sv('إنشاء المسودة','Create draft'));
   const form=root.querySelector('form');
-  form.elements.preset.onchange=()=>{const p=presets[form.elements.preset.value];form.elements.name.value=p?.name||'';form.elements.instructions.value=p?.instructions||''};
+  form.elements.preset.onchange=()=>{const p=agentPresets[form.elements.preset.value];form.elements.name.value=p?.name||'';form.elements.instructions.value=p?.instructions||''};
+  form.elements.preset.value=preset;form.elements.preset.onchange();root.scrollIntoView({block:'start'});
   bindForm(form,async ({preset,name,instructions})=>{
-   const p=presets[preset],draft={name,instructions,tone:p?.tone||'professional',handover_terms:p?.terms||[]};
+   const p=agentPresets[preset],draft={name,instructions,tone:p?.tone||'professional',handover_terms:p?.terms||[]};
    const r=await send('/v2/agents','POST',draft);await refresh(r.id,'build')
   });
- });
+ }
+ click('agent-new',()=>createAgent());
  for(const el of main.querySelectorAll('[data-agent]'))el.onclick=studioActions(main,()=>refresh(el.dataset.agent,'build'));
  const root=main.querySelector('#agent-body');
- if(!a){root.innerHTML=empty(sv('اختر وكيلًا أو أنشئ مسودة','Select an agent or create a draft'));return}
+ if(!a){
+  const shell=main.querySelector('.agent-shell');
+  shell.classList.add('directory-shell');
+  const side=shell.querySelector('.agent-list');
+  side.innerHTML='<div class="studio-tools"><input type="search" class="search" id="agent-search" placeholder="'+sv('ابحث عن وكيل…','Search agents…')+'" aria-label="'+sv('بحث الوكلاء','Search agents')+'"><small>'+sv('عمليات هذا الشهر','Runs this month')+' <bdi>'+list.usage.runs+' / '+list.policy.monthly_runs+'</bdi></small></div><div class="catalog-grid" id="agent-index"></div>';
+  const index=side.querySelector('#agent-index');
+  function draw(){
+    const q=side.querySelector('input').value.toLowerCase().trim(),items=list.agents.filter(x=>x.name.toLowerCase().includes(q));
+    index.innerHTML=items.map(x=>'<article class="catalog-card"><div class="card-line"><span class="tile-icon violet">'+icon('ai-assistant')+'</span><small>'+aw(x.state)+'</small></div><h2>'+esc(x.name)+'</h2><p>'+sv('إصدار المسودة','Draft revision')+' '+x.revision+'</p><button class="light" data-agent="'+esc(x.id)+'">'+sv('فتح الوكيل','Open agent')+'</button></article>').join('')||'<p class="directory-empty">'+(q?sv('لا توجد نتائج','No results'):sv('ابدأ بأحد النماذج أدناه لإنشاء وكيلك الأول.','Choose a template below to create your first agent.'))+'</p>';
+    index.querySelectorAll('[data-agent]').forEach(b=>b.onclick=studioActions(main,()=>refresh(b.dataset.agent)));
+  }
+  side.querySelector('input').oninput=draw;draw();
+  root.innerHTML='<h2>'+sv('نماذج الوكلاء الجاهزة','Agent templates')+'</h2><div class="catalog-grid">'+Object.entries(agentPresets).map(([key,p],i)=>'<article class="catalog-card"><span class="tile-icon '+['violet','blue','mint'][i%3]+'">'+icon(['customer-support','analytics','messages','calendar','workflow','bot'][i])+'</span><h3>'+p.name+'</h3><p>'+p.instructions+'</p><button class="light" data-preset="'+key+'">'+sv('استخدام النموذج','Use template')+'</button></article>').join('')+'</div>';
+  root.querySelectorAll('[data-preset]').forEach(b=>b.onclick=studioActions(main,()=>createAgent(b.dataset.preset)));
+  return;
+ }
  root.before(Object.assign(document.createElement('h2'),{textContent:a.name}));
  const tabs=document.createElement('nav');tabs.className='agent-tabs';tabs.setAttribute('aria-label',studioLabel);root.before(tabs);
  for(const k of ['build','knowledge','actions','rules','playground','deploy','analytics']){
@@ -151,7 +171,7 @@ function addInboxControls(main,data,views,list,open){
  toolbar.append(advanced);
  const controls=document.createElement('div');controls.className='service-toolbar inbox-filters';advanced.append(controls);
  const widths=document.createElement('details');widths.className='inbox-widths';widths.innerHTML='<summary>'+sv('عرض الأعمدة','Column widths')+'</summary><label>'+sv('القائمة','List')+'<input type="range" min="170" max="320" value="225" name="list"></label><label>'+sv('ملف العميل','Customer profile')+'<input type="range" min="155" max="260" value="195" name="profile"></label>';advanced.append(widths);
- for(const range of widths.querySelectorAll('input')){const key='labbily-inbox-'+range.name;try{range.value=localStorage.getItem(key)||range.value}catch{}const resize=()=>main.querySelector('.service-workspace').style.setProperty('--inbox-'+range.name,Number(range.value)+'px');resize();range.oninput=()=>{resize();try{localStorage.setItem(key,range.value)}catch{}}}
+ for(const range of widths.querySelectorAll('input')){const key='labbily-inbox-'+range.name;try{range.value=localStorage.getItem(key)||(range.name==='list'?300:range.value)}catch{}const resize=()=>main.querySelector('.service-workspace').style.setProperty('--inbox-'+range.name,Number(range.value)+'px');resize();range.oninput=()=>{resize();try{localStorage.setItem(key,range.value)}catch{}}}
  const scopeOptions=[['all',sv('الكل','All')],['mine',sv('محادثاتي','Mine')],['unread',sv('غير مقروء','Unread')],['unassigned',sv('غير مسند','Unassigned')],['human',sv('للموظفين','Human-owned')],['snoozed',sv('مؤجل','Snoozed')]];
  controls.innerHTML=select('scope',sv('العرض','View'),scopeOptions)+field('team_filter',sv('اسم الفريق','Team name'),'text','',false)+select('order',sv('الترتيب','Sort'),[['recent',sv('الأحدث','Newest first')],['oldest',sv('الأقدم','Oldest first')]])+select('saved_view',sv('فلاتري','My filters'),[['','—'],...views.map(v=>[v.id,v.name])])+studioButton('save-inbox-view',sv('حفظ الفلتر','Save filter'))+(me.role!=='sales'?studioButton('inbox-bulk',sv('إجراء جماعي','Bulk action')):'');
  main.querySelector('#service-search').oninput=list;main.querySelector('#service-state').onchange=list;

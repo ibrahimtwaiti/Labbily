@@ -185,8 +185,13 @@ def import_contacts(data: ImportFile, u=Depends(user)):
         added = 0
         for row in result:
             if row['status'] == 'ready':
-                added += db.execute("""INSERT INTO contacts(id,tenant_id,name,phone,tags,marketing_consent,created_at)
+                ident=uid()
+                inserted=db.execute("""INSERT INTO contacts(id,tenant_id,name,phone,tags,marketing_consent,created_at)
                                        VALUES(?,?,?,?,?,0,?) ON CONFLICT(tenant_id,phone) DO NOTHING""",
-                                    (uid(), u['tenant_id'], row['name'], row['phone'], row['tags'], now())).rowcount
+                                    (ident, u['tenant_id'], row['name'], row['phone'], row['tags'], now())).rowcount
+                if inserted:
+                    from .flow_runtime import on_contact_created
+                    on_contact_created(db,u['tenant_id'],ident,'import')
+                    added+=1
         audit(db, u, 'contacts.import', u['tenant_id'], str(added))
         return {'added': added, 'skipped': len(result)-added}

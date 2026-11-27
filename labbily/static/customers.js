@@ -18,7 +18,7 @@ async function contactsView(main) {
     select('segment',sv('الشريحة المحفوظة','Saved segment'),[all,...settings.segments.map(s=>[s.id,s.name])])+
     (editable ? button('save-segment',sv('حفظ الشريحة','Save segment'),'light small') : '')+
     (admin ? button('add-stage',sv('إضافة مرحلة','Add stage'),'light small') : '')+
-    '</div><div id="contacts-table"></div><button id="more-contacts" class="light" hidden>'+sv('تحميل المزيد','Load more')+'</button>';
+    '<div class="switcher">'+studioButton('contacts-list',sv('قائمة','List'))+studioButton('contacts-board',sv('لوحة المراحل','Stage board'))+'</div></div><div id="contacts-table"></div><button id="more-contacts" class="light" hidden>'+sv('تحميل المزيد','Load more')+'</button>';
   const search=main.querySelector('#contact-search'), stage=main.querySelector('[name=stage]'),
     consent=main.querySelector('[name=consent]'), segment=main.querySelector('[name=segment]'),
     more=main.querySelector('#more-contacts'), grid=main.querySelector('#contacts-table');
@@ -35,7 +35,16 @@ async function contactsView(main) {
       cursor=page.next;
       more.hidden=!cursor;
       const active=Object.values(criteria).some(Boolean);
-      grid.innerHTML=items.length ? table([tr("العميل"),tr("رقم التواصل"),sv('المرحلة','Stage'),tr("الوسوم"),tr("موافقة التسويق"),''],items.map(c=>
+      const board=sessionStorage.getItem('labbily.contacts.view')==='board';
+      for(const mode of ['list','board']){
+        const control=main.querySelector('#contacts-'+mode);
+        control.setAttribute('aria-pressed',String((mode==='board')===board));
+        control.onclick=()=>{sessionStorage.setItem('labbily.contacts.view',mode);load().catch(e=>toast(e.message))};
+      }
+      grid.innerHTML=board?'<div class="stage-board">'+stages.filter(([id])=>!stage.value||id===stage.value).map(([id,name])=>{
+        const matches=items.filter(c=>c.stage===id);
+        return '<section><h3>'+esc(name)+' <small>'+matches.length+'</small></h3>'+matches.map(c=>'<button class="light contact-tile" data-profile="'+esc(c.id)+'"><b>'+esc(c.name)+'</b><small dir="ltr">'+esc(c.phone)+'</small></button>').join('')+'</section>';
+      }).join('')+'</div>':items.length ? table([tr("العميل"),tr("رقم التواصل"),sv('المرحلة','Stage'),tr("الوسوم"),tr("موافقة التسويق"),''],items.map(c=>
         '<tr><td class="table-title">'+esc(c.name)+'<small>'+esc(c.email)+'</small></td><td dir="ltr">'+esc(c.phone)+'</td><td>'+esc(stageName(c.stage))+'</td><td>'+esc(c.tags||'—')+'</td><td>'+
         (c.marketing_consent?tr("موافق"):tr("غير موافق / منسحب"))+'</td><td><button class="small light" data-profile="'+esc(c.id)+'">'+sv('الملف','Profile')+'</button> <button class="small light" data-consent="'+esc(c.id)+'">'+tr("الموافقة")+'</button></td></tr>')) :
         empty(active?tr("لا توجد نتائج مطابقة"):tr("لا توجد جهات اتصال"),active?tr("جرّب اسمًا أو رقم هاتف آخر."):tr("أضف أول عميل. رقم الهاتف وحده لا يعني موافقة تسويقية."),'/static/labbily/contact-book.svg');

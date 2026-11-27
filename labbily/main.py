@@ -399,6 +399,8 @@ def contact_create(data:dict,u=Depends(user)):
     consent=data.get('marketing_consent') is True; source=text(data,'consent_source',1 if consent else 0,400); ident=uid()
     with transaction() as db:
         db.execute('INSERT INTO contacts VALUES(?,?,?,?,?,?,?,?,?,?)',(ident,u['tenant_id'],name,number,tags,int(consent),source,now() if consent else None,None,now()))
+        from .flow_runtime import on_contact_created
+        on_contact_created(db,u['tenant_id'],ident,'manual')
         audit(db,u,'contact.created',ident)
     return {'id':ident}
 
@@ -453,24 +455,60 @@ def opportunity_update(ident:str,data:dict,u=Depends(user)):
     return {'ok':True}
 
 @app.get('/api/tasks')
-def tasks(u=Depends(user)):
+def tasks(scope:str='mine',u=Depends(user)):
     permit(u,'crm')
-    with transaction() as db: return rows(db,'SELECT * FROM tasks WHERE tenant_id=? AND owner_id=? ORDER BY due_at',(u['tenant_id'],u['id']))
+    if scope not in {'mine','team'}: raise HTTPException(422,'نطاق المهام غير صالح')
+    if scope=='team' and u['role'] not in {'admin','supervisor'}: raise HTTPException(403,'عرض الفريق للمشرف')
+    query = """SELECT t.*,u.name owner_name,COALESCE(p.priority,'normal') priority
+               FROM tasks t JOIN users u ON u.id=t.owner_id AND u.tenant_id=t.tenant_id
+               LEFT JOIN task_priorities p ON p.task_id=t.id WHERE t.tenant_id=?"""
+    params = [u['tenant_id']]
+    if scope=='mine':
+        query += ' AND t.owner_id=?'
+        params.append(u['id'])
+    with transaction() as db:
+        return rows(db,query+' ORDER BY t.due_at,t.id',params)
+
+def task_owner(db,data,u,default):
+    owner = text(data,'owner_id',0) or default
+    if owner != default:
+        if u['role'] not in {'admin','supervisor'}: raise HTTPException(403,'نقل المهمة للمشرف')
+        if not one(db,"SELECT id FROM users WHERE id=? AND tenant_id=? AND active=1 AND role IN ('admin','supervisor','sales')",(owner,u['tenant_id'])):
+            raise HTTPException(422,'المسؤول غير متاح')
+    return owner
+
+def task_priority(db,data,ident):
+    if 'priority' in data:
+        priority=choice(data,'priority',{'normal','high','low'})
+        db.execute('INSERT INTO task_priorities(task_id,priority) VALUES(?,?) ON CONFLICT(task_id) DO UPDATE SET priority=excluded.priority',(ident,priority))
 
 @app.post('/api/tasks')
 def task_create(data:dict,u=Depends(user)):
     permit(u,'crm'); title=text(data,'title'); due=valid_date(text(data,'due_at',1,40)); ident=uid()
     with transaction() as db:
-        db.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?)',(ident,u['tenant_id'],u['id'],title,due,'open',now())); audit(db,u,'task.created',ident)
+        owner=task_owner(db,data,u,u['id'])
+        db.execute('INSERT INTO tasks(id,tenant_id,owner_id,title,due_at,status,created_at) VALUES(?,?,?,?,?,?,?)',(ident,u['tenant_id'],owner,title,due,'open',now()))
+        task_priority(db,data,ident)
+        audit(db,u,'task.created',ident)
     return {'id':ident}
 
 @app.patch('/api/tasks/{ident}')
 def task_update(ident:str,data:dict,u=Depends(user)):
-    permit(u,'crm'); status=choice(data,'status',{'open','done'})
+    permit(u,'crm')
+    if not set(data).intersection({'status','due_at','title','priority','owner_id'}): raise HTTPException(422,'حدّد التعديل')
     with transaction() as db:
         r=scoped(db,'tasks',ident,u)
-        if r['owner_id']!=u['id']: raise HTTPException(403,'المهمة لمستخدم آخر')
-        db.execute('UPDATE tasks SET status=? WHERE id=?',(status,ident)); audit(db,u,'task.updated',ident,status)
+        if r['owner_id']!=u['id'] and u['role'] not in {'admin','supervisor'}: raise HTTPException(403,'المهمة لمستخدم آخر')
+        values={}
+        if 'status' in data: values['status']=choice(data,'status',{'open','done'})
+        if 'title' in data: values['title']=text(data,'title')
+        if 'due_at' in data: values['due_at']=valid_date(text(data,'due_at',1,40))
+        if 'owner_id' in data: values['owner_id']=task_owner(db,data,u,r['owner_id'])
+        if values:
+            assignments=','.join(key+'=?' for key in values)
+            db.execute('UPDATE tasks SET '+assignments+' WHERE id=? AND tenant_id=?',(*values.values(),ident,u['tenant_id']))
+        task_priority(db,data,ident)
+        audit(db,u,'task.updated',ident)
     return {'ok':True}
 
 @app.get('/api/reports')
@@ -609,7 +647,7 @@ def sitemap(request:Request):
 
 from .service_api import router as service_router
 from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding, meta_lifecycle, saas, meta_pages, email_verification, privacy, meta_data, messenger_metrics, page_posts, api_docs
-from . import agent_api, agent_knowledge, inbox_workspace, agent_jobs, agent_retrieval, customer_workspace, flows
+from . import agent_api, agent_knowledge, inbox_workspace, agent_jobs, agent_retrieval, customer_workspace, flows, workspace_operations
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')

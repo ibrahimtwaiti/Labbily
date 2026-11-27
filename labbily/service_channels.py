@@ -70,7 +70,10 @@ def link_crm(ident:str,data:dict,u=Depends(user)):
         else:
             number=phone(text(data,'phone'));name=text(data,'name',1,200);cid=uid()
             # Explicit identity evidence, never merge by name or profile image.
-            db.execute("INSERT INTO contacts(id,tenant_id,name,phone,tags,marketing_consent,consent_source,created_at) VALUES(?,?,?,?,?,0,'',?) ON CONFLICT(tenant_id,phone) DO NOTHING",(cid,u['tenant_id'],name,number,'service-v2',now()))
+            inserted=db.execute("INSERT INTO contacts(id,tenant_id,name,phone,tags,marketing_consent,consent_source,created_at) VALUES(?,?,?,?,?,0,'',?) ON CONFLICT(tenant_id,phone) DO NOTHING",(cid,u['tenant_id'],name,number,'service-v2',now())).rowcount
+            if inserted:
+                from .flow_runtime import on_contact_created
+                on_contact_created(db,u['tenant_id'],cid,'channel')
             cid=one(db,'SELECT id FROM contacts WHERE tenant_id=? AND phone=?',(u['tenant_id'],number))['id']
         if identity['customer_id'] and identity['customer_id']!=cid:raise HTTPException(409,'unlink_existing_customer_first')
         db.execute('UPDATE service_identities SET customer_id=?,verified_at=? WHERE id=?',(cid,now(),ident));audit(db,u,'service.identity.crm_linked',ident,evidence)

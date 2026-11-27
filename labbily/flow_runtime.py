@@ -13,6 +13,47 @@ def advance(step, pos, context):
     return pos+1
 
 
+def update_contact_step(db, contact, kind, value):
+    cid=contact['id']
+    profile=one(db,'SELECT stage FROM contact_profiles WHERE contact_id=?',(cid,)) or {'stage':'new'}
+    stage=value if kind=='stage' else profile['stage']
+    if kind=='tag':
+        tags=[x.strip() for x in contact['tags'].split(',') if x.strip()]
+        if value not in tags:tags.append(value)
+        joined=', '.join(tags)
+        if len(joined)>400:raise HTTPException(409,'tag_limit')
+        db.execute('UPDATE contacts SET tags=? WHERE id=?',(joined,cid))
+    elif stage!=profile['stage']:
+        db.execute('INSERT INTO contact_stage_history VALUES(?,?,?,?)',(uid(),cid,stage,now()))
+    db.execute("""INSERT INTO contact_profiles(contact_id,stage,email,revision) VALUES(?,?,'',1) ON CONFLICT(contact_id)
+                  DO UPDATE SET stage=excluded.stage,revision=contact_profiles.revision+1""",(cid,stage))
+
+
+def on_contact_created(db, tenant, ident, source):
+    flow=one(db,"SELECT id,published,published_revision FROM workspace_flows WHERE tenant_id=? AND active_trigger='contact_created'",(tenant,))
+    if not flow:return
+    if one(db,'SELECT contact_id FROM contact_creation_runs WHERE flow_id=? AND contact_id=?',(flow['id'],ident)):return
+    steps=json.loads(flow['published'])
+    pos=count=0
+    state,detail='done',''
+    db.execute('SAVEPOINT contact_steps')
+    try:
+        while pos<len(steps):
+            step=steps[pos]
+            if step['action']!='condition':
+                contact=one(db,'SELECT id,tags FROM contacts WHERE tenant_id=? AND id=?',(tenant,ident))
+                update_contact_step(db,contact,step['action'],step['value'])
+            pos=advance(step,pos,{'source':source})
+            count+=1
+    except HTTPException as exc:
+        db.execute('ROLLBACK TO SAVEPOINT contact_steps')
+        state,detail,count='failed',str(exc.detail),0
+    finally:
+        db.execute('RELEASE SAVEPOINT contact_steps')
+    db.execute('INSERT INTO contact_creation_runs(flow_id,contact_id,revision,position,state,detail,created_at) VALUES(?,?,?,?,?,?,?)',
+               (flow['id'],ident,flow['published_revision'],count,state,detail,int(time.time())))
+
+
 def trigger(db, tid, ticket_id, kind, event_id, flow_id=None):
     sql='SELECT * FROM workspace_flows WHERE tenant_id=? AND active_trigger=?'
     flow=one(db,sql+' AND id=?',(tid,kind,flow_id)) if flow_id else one(db,sql,(tid,kind))
@@ -86,19 +127,7 @@ def perform(db,run,t,step,clock):
     if kind in ('tag','stage'):
         contact=one(db,'SELECT * FROM contacts WHERE id=? AND tenant_id=?'+(' FOR UPDATE' if postgres() else ''),(identity['customer_id'],t['tenant_id']))
         if not contact:raise HTTPException(409,'linked_customer_required')
-        cid=contact['id']
-        profile=one(db,'SELECT stage FROM contact_profiles WHERE contact_id=?',(cid,)) or {'stage':'new'}
-        stage=value if kind=='stage' else profile['stage']
-        if kind=='tag':
-            tags=[x.strip() for x in contact['tags'].split(',') if x.strip()]
-            if value not in tags:tags.append(value)
-            joined=', '.join(tags)
-            if len(joined)>400:raise HTTPException(409,'tag_limit')
-            db.execute('UPDATE contacts SET tags=? WHERE id=?',(joined,cid))
-        elif stage!=profile['stage']:
-            db.execute('INSERT INTO contact_stage_history VALUES(?,?,?,?)',(uid(),cid,stage,now()))
-        db.execute("""INSERT INTO contact_profiles(contact_id,stage,email,revision) VALUES(?,?,'',1) ON CONFLICT(contact_id)
-                      DO UPDATE SET stage=excluded.stage,revision=contact_profiles.revision+1""",(cid,stage))
+        update_contact_step(db,contact,kind,value)
     elif kind=='assign':
         owner=None
         team=t['team']

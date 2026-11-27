@@ -122,3 +122,44 @@ class FocusedWorkspace(unittest.TestCase):
         with patch.object(service,'token',return_value='test'):
             self.assertTrue(flows.process_flow())
         self.assertEqual(self.client.get(base).json()['runs'][0]['detail'],'contact_messages_blocked')
+
+    def test_contact_creation_template_runs_once_and_preserves_failed_contacts(self):
+        self.login()
+        base=self.publish([{'action':'condition','field':'source','value':'manual','otherwise':3},
+                           {'action':'tag','value':'new-lead'}],'contact_created')
+        endpoint='/api/contacts'
+        self.client.post(endpoint,json={'name':'New lead','phone':'+966501111002'}).raise_for_status()
+        self.assertEqual(self.client.get(endpoint).json()[0]['tags'],'new-lead')
+        csv={'csv_text':'name,phone\nImported,+966501111003','apply':True}
+        for _ in range(2):self.client.post('/api/v2/crm/import',json=csv).raise_for_status()
+        runs=self.client.get(base).json()['runs']
+        self.assertEqual(sorted(r['position'] for r in runs),[1,2])
+        self.client.post(endpoint,json={'name':'Full tags','phone':'+966501111004','tags':'x'*400}).raise_for_status()
+        self.assertTrue(any(r['state']=='failed' and r['detail']=='tag_limit' for r in self.client.get(base).json()['runs']))
+        invalid=self.client.post('/api/v2/workflows',json={'name':'Invalid','trigger':'contact_created','steps':[{'action':'message','value':'test'}]})
+        self.assertEqual(invalid.status_code,422)
+
+    def test_task_calendar_team_and_campaign_state_are_isolated(self):
+        self.login()
+        task={'title':'Follow-up','owner_id':'sales-a','due_at':'2026-12-01T09:30:00+03:00','priority':'high'}
+        ident=self.client.post('/api/tasks',json=task).json()['id']
+        self.assertEqual(self.client.get('/api/tasks').json(),[])
+        self.assertEqual(self.client.get('/api/tasks?scope=team').json()[0]['priority'],'high')
+        self.assertEqual(self.client.post('/api/tasks',json={**task,'owner_id':'admin-b'}).status_code,422)
+        self.login('sales-a')
+        self.assertEqual(self.client.get('/api/tasks?scope=team').status_code,403)
+        self.client.patch('/api/tasks/'+ident,json={'status':'done','due_at':'2026-12-03T08:00:00Z'}).raise_for_status()
+        self.assertEqual(self.client.get('/api/tasks').json()[0]['status'],'done')
+        self.login('admin-b')
+        self.assertEqual(self.client.get('/api/tasks?scope=team').json(),[])
+        self.assertEqual(self.client.patch('/api/tasks/'+ident,json={'priority':'low'}).status_code,404)
+        url='/api/v2/campaigns'
+        plan={'name':'Winter','channel':'whatsapp','body':'Welcome'}
+        campaign=self.client.post(url,json=plan).json()['id']
+        self.assertEqual(self.client.post(url,json=plan).status_code,409)
+        edit={**plan,'revision':1,'state':'planned','planned_at':'2026-12-01T09:30:00+03:00'}
+        self.client.put(url+'/'+campaign,json=edit).raise_for_status()
+        self.assertEqual(self.client.put(url+'/'+campaign,json=edit).status_code,409)
+        self.login()
+        self.assertEqual(self.client.get(url).json()['items'],[])
+        self.assertEqual(self.client.put(url+'/'+campaign,json=edit).status_code,404)
