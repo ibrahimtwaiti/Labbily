@@ -1,0 +1,11 @@
+# Project context
+## Product
+Initial Wasla blueprint (12 Nov) described a public marketing site, company workspaces and provider administration for B2B sales and conversations. V1 foundational lead/offer/project/CRM functionality remains historical and must not be removed casually. V2 added social customer service, Meta integrations and SaaS controls. Labbily rebrand and narrowed product direction (24 Nov): unified inbox, customer intelligence, AI agents, automation, channels and reporting; not a generic agency platform. Preserve old data and contracts while explicitly planning deprecations.
+## Reference evolution
+Original functional/design reference Chat Center; subsequent marketing brief Preznta-inspired premium interactive storytelling, independently branded. Current owner preference: Flovoo as main UX/CRM/onboarding reference, Respond.io functional inspiration, Wats operations inspiration. Existing focused release notes record 50/30/20 weights, not a contractual clone. Do not reuse competitor branding, source, or claims.
+## Source register
+- Actual code, git refs, PRs and CI: [main](https://github.com/ibrahimtwaiti/Labbily/tree/3390ab3df2c4b54c37e21b2093306fac969a2d5c), [#41](https://github.com/ibrahimtwaiti/Labbily/pull/41). 
+- Existing [README](../../README.md), [V1 scope](../V1_SCOPE_AR.md), [V2 implementation](../V2_GUIDE_IMPLEMENTATION_AR.md), [V2 handover](../V2_HANDOVER_AR.md), [development audit](../../DEVELOPMENT_COMPLETION_AUDIT.md), [production readiness](../../LABBILY_PRODUCTION_READINESS.md).
+- [Focused release notes at branch SHA](https://github.com/ibrahimtwaiti/Labbily/blob/87638defdcdc9b98385e66d2bc2a91351ed79c8d/docs/FOCUSED_WORKSPACE_RELEASE_AR.md): initial focused changes, may lag later branch changes.
+- Available historical user documents: sales_platform_build_blueprint_ar(1).docx; AI agent management detailed text brief; Premium Interactive Website Transformation brief. Requirements summarized, not verbatim. Original social API guide, focused PDF, identity ZIP and exact media reference not comprehensively retrieved; request from owner/Work privately.
+- Prior conversation decisions summarized in DECISIONS; reports from conversations are not direct evidence of live systems.

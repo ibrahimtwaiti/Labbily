@@ -1,0 +1,9 @@
+# Timeline and branch inventory
+- 12 Nov: V1 blueprint, base implementation, Neon/Vercel migration, branding and initial deploy documented.
+- 13 Nov: V1 governance, R2 restore/retention, alerts and operational exceptions documented.
+- 14–24 Nov: V2 service/API, provider console, Meta readiness, staging journey and commercial gates; #27 historical readiness. 
+- 24–26 Nov: Labbily identity and focused solutions, Agent Studio/inbox #35 (production history fe8f732a), naming #38 merged 3390ab3df2c4b54c37e21b2093306fac969a2d5c.
+- 27–28 Nov: focused workspace V1.3 #41 draft 87638defdcdc9b98385e66d2bc2a91351ed79c8d; CI acceptance/postgres/browser green at latest observed SHA; not production.
+## Branch inventory (28 Nov, GitHub branches API)
+main; brand/labbily-project-names; docs/v1-r2-restore-verified; docs/v1-technical-acceptance-20261113; docs/v1-technical-closure-and-exceptions; feat/conversation-agent-studio; feat/conversation-solutions; feat/labbily-brand; feat/meta-provider-readiness; feat/neon-vercel-v1; feat/production-ready; feat/v2-social-service; feat/wasla-brand-system; feature/focused-workspace-v13; fix/contacts-contrast-empty-art; fix/r2-auth-after-monitor-cleanup; fix/r2-auth-error-classification; fix/r2-backup-diagnostics-and-retry; fix/shared-labbily-loader; fix/v1-closeout; fix/v1-retention-atomic-eligibility; ops/activate-owner-email-alerts; ops/r2-auth-preflight-recheck; ops/r2-auth-preflight-v1-status; ops/remove-one-time-monitor-drill; ops/validate-v1-retention-live; release/v1-closeout-from-main; release/v1-owner-governance.
+28 observed branches; only open PR returned was #41 at time of initial inspection. Branch names do not establish merged state; compare before cleanup. Releases list empty at read; tag enumeration unavailable. Do not delete old branches during handover.
