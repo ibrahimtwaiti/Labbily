@@ -3104,6 +3104,72 @@
               "default": "",
               "title": "Channel"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "mine",
+                "unread",
+                "unassigned",
+                "human",
+                "snoozed"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "default": "",
+              "title": "Team"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "recent",
+                "oldest"
+              ],
+              "type": "string",
+              "default": "recent",
+              "title": "Order"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 110,
+              "default": "",
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -10917,10 +10983,3288 @@
           }
         ]
       }
+    },
+    "/api/admin/workspaces/{tid}/agent-policy": {
+      "get": {
+        "summary": "Read Policy",
+        "operationId": "read_policy_api_admin_workspaces__tid__agent_policy_get",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Write Policy",
+        "operationId": "write_policy_api_admin_workspaces__tid__agent_policy_put",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents": {
+      "get": {
+        "summary": "Agent List",
+        "operationId": "agent_list_api_v2_agents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create Agent",
+        "operationId": "create_agent_api_v2_agents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Playbook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}": {
+      "get": {
+        "summary": "Agent Detail",
+        "operationId": "agent_detail_api_v2_agents__ident__get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Edit Agent",
+        "operationId": "edit_agent_api_v2_agents__ident__put",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Edit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}/playground": {
+      "post": {
+        "summary": "Playground",
+        "operationId": "playground_api_v2_agents__ident__playground_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Question"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}/scenarios/{case}": {
+      "delete": {
+        "summary": "Delete Scenario",
+        "operationId": "delete_scenario_api_v2_agents__ident__scenarios__case__delete",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          },
+          {
+            "name": "case",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}/publish": {
+      "post": {
+        "summary": "Publish",
+        "operationId": "publish_api_v2_agents__ident__publish_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Publish"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}/versions/{version_id}": {
+      "get": {
+        "summary": "Version Detail",
+        "operationId": "version_detail_api_v2_agents__ident__versions__version_id__get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agents/{ident}/state": {
+      "post": {
+        "summary": "Transition",
+        "operationId": "transition_api_v2_agents__ident__state_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Transition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}/deployment": {
+      "put": {
+        "summary": "Deploy",
+        "operationId": "deploy_api_v2_agents__ident__deployment_put",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Deployment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agents/{ident}/deployment/{account_id}": {
+      "delete": {
+        "summary": "Undeploy",
+        "operationId": "undeploy_api_v2_agents__ident__deployment__account_id__delete",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/tickets/{ident}/copilot": {
+      "get": {
+        "summary": "Available Agents",
+        "operationId": "available_agents_api_v2_tickets__ident__copilot_get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Copilot",
+        "operationId": "copilot_api_v2_tickets__ident__copilot_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Assist"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-knowledge": {
+      "get": {
+        "summary": "Documents",
+        "operationId": "documents_api_v2_agent_knowledge_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agent-knowledge/{ident}": {
+      "get": {
+        "summary": "Document",
+        "operationId": "document_api_v2_agent_knowledge__ident__get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agent-knowledge/import": {
+      "post": {
+        "summary": "Import Document",
+        "operationId": "import_document_api_v2_agent_knowledge_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Import"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-knowledge/{ident}/approve": {
+      "post": {
+        "summary": "Approve",
+        "operationId": "approve_api_v2_agent_knowledge__ident__approve_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-knowledge/{ident}/refresh": {
+      "post": {
+        "summary": "Refresh",
+        "operationId": "refresh_api_v2_agent_knowledge__ident__refresh_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/inbox-views": {
+      "get": {
+        "summary": "Views",
+        "operationId": "views_api_v2_inbox_views_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Save",
+        "operationId": "save_api_v2_inbox_views_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/View"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/inbox-views/{ident}": {
+      "delete": {
+        "summary": "Remove",
+        "operationId": "remove_api_v2_inbox_views__ident__delete",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/tickets/{ident}/seen": {
+      "post": {
+        "summary": "Seen",
+        "operationId": "seen_api_v2_tickets__ident__seen_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/inbox-actions": {
+      "post": {
+        "summary": "Update",
+        "operationId": "update_api_v2_inbox_actions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Change"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/tickets/{ident}/customer-timeline": {
+      "get": {
+        "summary": "Customer Timeline",
+        "operationId": "customer_timeline_api_v2_tickets__ident__customer_timeline_get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agent-connections": {
+      "get": {
+        "summary": "Connections",
+        "operationId": "connections_api_v2_agent_connections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agent-connections/{kind}": {
+      "put": {
+        "summary": "Configure",
+        "operationId": "configure_api_v2_agent_connections__kind__put",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "order",
+                "availability",
+                "webhook"
+              ],
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Connection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      },
+      "delete": {
+        "summary": "Disconnect",
+        "operationId": "disconnect_api_v2_agent_connections__kind__delete",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "order",
+                "availability",
+                "webhook"
+              ],
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-approvals": {
+      "get": {
+        "summary": "Approvals",
+        "operationId": "approvals_api_v2_agent_approvals_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agent-approvals/{ident}": {
+      "post": {
+        "summary": "Approve Action",
+        "operationId": "approve_action_api_v2_agent_approvals__ident__post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-knowledge/{ident}/index": {
+      "post": {
+        "summary": "Index Doc",
+        "operationId": "index_doc_api_v2_agent_knowledge__ident__index_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-knowledge/{ident}/schedule": {
+      "put": {
+        "summary": "Schedule",
+        "operationId": "schedule_api_v2_agent_knowledge__ident__schedule_put",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/agent-costs": {
+      "get": {
+        "summary": "Costs",
+        "operationId": "costs_api_v2_agent_costs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/crm/settings": {
+      "get": {
+        "summary": "Settings",
+        "operationId": "settings_api_v2_crm_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/crm/stages": {
+      "post": {
+        "summary": "Create Stage",
+        "operationId": "create_stage_api_v2_crm_stages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Stage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/crm/segments": {
+      "post": {
+        "summary": "Create Segment",
+        "operationId": "create_segment_api_v2_crm_segments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Segment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/crm/contacts": {
+      "get": {
+        "summary": "Directory",
+        "operationId": "directory_api_v2_crm_contacts_get",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "default": "",
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 40,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "Stage"
+            }
+          },
+          {
+            "name": "consent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "",
+                "yes",
+                "no"
+              ],
+              "type": "string",
+              "default": "",
+              "title": "Consent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/crm/contacts/{ident}/history": {
+      "get": {
+        "summary": "History",
+        "operationId": "history_api_v2_crm_contacts__ident__history_get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v2/crm/contacts/{ident}": {
+      "put": {
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_v2_crm_contacts__ident__put",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Profile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/crm/import": {
+      "post": {
+        "summary": "Import Contacts",
+        "operationId": "import_contacts_api_v2_crm_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportFile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/workflows": {
+      "get": {
+        "summary": "List Flows",
+        "operationId": "list_flows_api_v2_workflows_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "422": {
+            "description": "Invalid request (credentials are not reflected)"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create",
+        "operationId": "create_api_v2_workflows_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Flow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/workflows/{ident}": {
+      "get": {
+        "summary": "Detail",
+        "operationId": "detail_api_v2_workflows__ident__get",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Edit",
+        "operationId": "edit_api_v2_workflows__ident__put",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Flow"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/workflows/{ident}/simulate": {
+      "post": {
+        "summary": "Simulate",
+        "operationId": "simulate_api_v2_workflows__ident__simulate_post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Simulation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/workflows/{ident}/{action}": {
+      "post": {
+        "summary": "Release",
+        "operationId": "release_api_v2_workflows__ident___action__post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "publish",
+                "pause"
+              ],
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Revision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
+    },
+    "/api/v2/workflows/{ident}/tickets/{ticket_id}": {
+      "post": {
+        "summary": "Manual",
+        "operationId": "manual_api_v2_workflows__ident__tickets__ticket_id__post",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ident"
+            }
+          },
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden, invalid state, CSRF or webhook signature"
+          },
+          "404": {
+            "description": "Resource not in authorized workspace"
+          },
+          "409": {
+            "description": "Conflict, quota or unmet prerequisites"
+          },
+          "429": {
+            "description": "Rate or monthly API limit"
+          },
+          "502": {
+            "description": "Sanitized upstream error"
+          },
+          "503": {
+            "description": "Required configuration unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": [],
+            "CSRF": []
+          }
+        ],
+        "description": " Same-origin JSON is required. Tenant identity comes from the session; provider delegation requires the provider role."
+      }
     }
   },
   "components": {
     "schemas": {
+      "Assist": {
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "summarize",
+              "translate",
+              "rewrite",
+              "shorten",
+              "expand",
+              "formal",
+              "friendly",
+              "correct",
+              "intent",
+              "next_step"
+            ],
+            "title": "Operation"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Text",
+            "default": ""
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Agent Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation",
+          "agent_id"
+        ],
+        "title": "Assist"
+      },
+      "Change": {
+        "properties": {
+          "tickets": {
+            "items": {
+              "$ref": "#/components/schemas/Pick"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Tickets"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "take",
+              "resume",
+              "snooze",
+              "wake",
+              "close"
+            ],
+            "title": "Action"
+          },
+          "until": {
+            "type": "integer",
+            "title": "Until",
+            "default": 0
+          },
+          "resolution": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Resolution",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tickets",
+          "action"
+        ],
+        "title": "Change"
+      },
       "CompleteSignup": {
         "properties": {
           "state": {
@@ -10956,6 +14300,75 @@
         ],
         "title": "CompleteSignup"
       },
+      "Connection": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 9,
+            "title": "Endpoint"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 2048,
+            "title": "Token",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "endpoint"
+        ],
+        "title": "Connection"
+      },
+      "Criteria": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Query",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 30,
+            "title": "Status",
+            "default": ""
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "recent",
+              "oldest"
+            ],
+            "title": "Order",
+            "default": "recent"
+          },
+          "team": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Team",
+            "default": ""
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "all",
+              "mine",
+              "unread",
+              "unassigned",
+              "human",
+              "snoozed"
+            ],
+            "title": "Scope",
+            "default": "all"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Criteria"
+      },
       "DeleteRequest": {
         "properties": {
           "scope": {
@@ -10990,6 +14403,52 @@
         ],
         "title": "DeleteRequest"
       },
+      "Deployment": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "suggest",
+              "internal",
+              "auto",
+              "hybrid"
+            ],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account_id",
+          "mode"
+        ],
+        "title": "Deployment"
+      },
+      "Edit": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "config": {
+            "$ref": "#/components/schemas/Playbook"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "config"
+        ],
+        "title": "Edit"
+      },
       "Exchange": {
         "properties": {
           "state": {
@@ -11013,6 +14472,79 @@
         ],
         "title": "Exchange"
       },
+      "Filters": {
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Q",
+            "default": ""
+          },
+          "stage": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Stage",
+            "default": ""
+          },
+          "consent": {
+            "type": "string",
+            "enum": [
+              "",
+              "yes",
+              "no"
+            ],
+            "title": "Consent",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Filters"
+      },
+      "Flow": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "opened",
+              "closed",
+              "field_changed",
+              "stage_changed"
+            ],
+            "title": "Trigger"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Steps"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "trigger",
+          "steps"
+        ],
+        "title": "Flow"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -11026,8 +14558,90 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "Import": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 18000,
+            "title": "Text",
+            "default": ""
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Url",
+            "default": ""
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 180,
+            "title": "Filename",
+            "default": ""
+          },
+          "encoded": {
+            "type": "string",
+            "maxLength": 1400000,
+            "title": "Encoded",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "Import"
+      },
+      "ImportFile": {
+        "properties": {
+          "csv_text": {
+            "type": "string",
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Csv Text"
+          },
+          "apply": {
+            "type": "boolean",
+            "title": "Apply",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "csv_text"
+        ],
+        "title": "ImportFile"
+      },
       "Limits": {
         "properties": {
+          "max_agents": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Max Agents",
+            "default": 3
+          },
+          "monthly_runs": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Monthly Runs",
+            "default": 500
+          },
+          "knowledge_documents": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Knowledge Documents",
+            "default": 100
+          },
           "seats": {
             "type": "integer",
             "maximum": 10000.0,
@@ -11060,6 +14674,28 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Limits"
+      },
+      "Pick": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "Pick"
       },
       "Plan": {
         "properties": {
@@ -11100,6 +14736,136 @@
         ],
         "title": "Plan"
       },
+      "Playbook": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Rules"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Instructions",
+            "default": ""
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en",
+              "auto"
+            ],
+            "title": "Language",
+            "default": "auto"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "professional",
+              "friendly",
+              "concise"
+            ],
+            "title": "Tone",
+            "default": "professional"
+          },
+          "handover_terms": {
+            "items": {
+              "type": "string",
+              "maxLength": 180,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Handover Terms"
+          },
+          "tools": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "followup",
+                "availability",
+                "order",
+                "webhook"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Tools"
+          },
+          "model_routing": {
+            "type": "boolean",
+            "title": "Model Routing",
+            "default": false
+          },
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 180,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Document Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Sources"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Playbook"
+      },
+      "Policy": {
+        "properties": {
+          "max_agents": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Max Agents"
+          },
+          "monthly_runs": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Monthly Runs"
+          },
+          "live_enabled": {
+            "type": "boolean",
+            "title": "Live Enabled"
+          },
+          "external_enabled": {
+            "type": "boolean",
+            "title": "External Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "max_agents",
+          "monthly_runs",
+          "live_enabled",
+          "external_enabled"
+        ],
+        "title": "Policy"
+      },
       "Post": {
         "properties": {
           "body": {
@@ -11121,6 +14887,136 @@
           "confirmation"
         ],
         "title": "Post"
+      },
+      "Profile": {
+        "properties": {
+          "blocked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked"
+          },
+          "stage": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Stage"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "Email",
+            "default": ""
+          },
+          "tags": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Tags",
+            "default": ""
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "stage",
+          "revision"
+        ],
+        "title": "Profile"
+      },
+      "Publish": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "Publish"
+      },
+      "Question": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 3000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "answer",
+                  "review",
+                  "handover",
+                  "followup",
+                  "availability",
+                  "order",
+                  "webhook"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "save": {
+            "type": "boolean",
+            "title": "Save",
+            "default": false
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "whatsapp",
+              "messenger",
+              "instagram"
+            ],
+            "title": "Channel",
+            "default": "whatsapp"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ],
+            "title": "Language",
+            "default": "ar"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ],
+            "title": "Priority",
+            "default": "normal"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "Question"
       },
       "RegisterPhone": {
         "properties": {
@@ -11232,6 +15128,91 @@
         ],
         "title": "Resend"
       },
+      "Revision": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "Revision"
+      },
+      "Rule": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "text",
+              "channel",
+              "language",
+              "priority"
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "knowledge",
+              "handover",
+              "followup",
+              "availability",
+              "order",
+              "webhook"
+            ],
+            "title": "Action"
+          },
+          "otherwise": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "knowledge",
+              "handover"
+            ],
+            "title": "Otherwise",
+            "default": "continue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "value",
+          "action"
+        ],
+        "title": "Rule"
+      },
+      "Segment": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/Filters"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "filters"
+        ],
+        "title": "Segment"
+      },
       "SelectPage": {
         "properties": {
           "state": {
@@ -11276,6 +15257,152 @@
         ],
         "title": "Selection"
       },
+      "Simulation": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "whatsapp",
+              "messenger",
+              "instagram"
+            ],
+            "title": "Channel",
+            "default": "whatsapp"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team",
+            "default": "support"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "default": "normal"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "new"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "ar"
+          },
+          "office_hours": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no"
+            ],
+            "title": "Office Hours",
+            "default": "yes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "Simulation"
+      },
+      "Source": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 3000,
+            "minLength": 1,
+            "title": "Answer"
+          },
+          "aliases": {
+            "items": {
+              "type": "string",
+              "maxLength": 180,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Aliases"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "answer"
+        ],
+        "title": "Source"
+      },
+      "Stage": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Stage"
+      },
+      "Step": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "message",
+              "question",
+              "assign",
+              "condition",
+              "tag",
+              "stage",
+              "wait",
+              "close"
+            ],
+            "title": "Action"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 900,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "default": ""
+          },
+          "otherwise": {
+            "type": "integer",
+            "maximum": 13.0,
+            "minimum": 0.0,
+            "title": "Otherwise",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "value"
+        ],
+        "title": "Step"
+      },
       "Subscription": {
         "properties": {
           "plan_id": {
@@ -11316,6 +15443,43 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Sync"
+      },
+      "Transition": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "pause",
+              "archive",
+              "restore"
+            ],
+            "title": "Action"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "revision"
+        ],
+        "title": "Transition"
       },
       "ValidationError": {
         "properties": {
@@ -11372,6 +15536,26 @@
           "token"
         ],
         "title": "Verify"
+      },
+      "View": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "criteria": {
+            "$ref": "#/components/schemas/Criteria"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "criteria"
+        ],
+        "title": "View"
       }
     },
     "securitySchemes": {

@@ -26,7 +26,10 @@ def process_one():
                         number=phone('+'+msg['from']); stamp=now()
                         contact=one(db,'SELECT * FROM contacts WHERE tenant_id=? AND phone=?',(tid,number))
                         if not contact:
-                            cid=uid(); db.execute('INSERT INTO contacts(id,tenant_id,name,phone,created_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,phone) DO NOTHING',(cid,tid,names.get(msg['from'],'عميل واتساب')[:200],number,stamp))
+                            cid=uid(); inserted=db.execute('INSERT INTO contacts(id,tenant_id,name,phone,created_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,phone) DO NOTHING',(cid,tid,names.get(msg['from'],'عميل واتساب')[:200],number,stamp)).rowcount
+                            if inserted:
+                                from .flow_runtime import on_contact_created
+                                on_contact_created(db,tid,cid,'channel')
                             cid=one(db,'SELECT id FROM contacts WHERE tenant_id=? AND phone=?',(tid,number))['id']
                         else: cid=contact['id']
                         conv=one(db,'SELECT * FROM conversations WHERE channel_id=? AND contact_id=?',(channel['id'],cid))

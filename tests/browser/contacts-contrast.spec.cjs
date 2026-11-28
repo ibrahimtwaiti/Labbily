@@ -7,7 +7,7 @@ for(const lang of ['ar','en']){
     await page.locator('[name=password]').fill('service-test-password');
     await page.locator('button[type=submit]').click();
     await page.waitForURL('**/app');
-    await page.route('**/api/contacts',route=>route.fulfill({json:[]}));
+    await page.route('**/api/v2/crm/contacts?*',route=>route.fulfill({json:{items:[],next:null}}));
     await page.goto('/app/contacts?lang='+lang);
     const card=page.locator('#contacts-table > .empty');
     await expect(card.locator('h3')).toHaveText(lang==='ar'?'لا توجد جهات اتصال':'No contacts');

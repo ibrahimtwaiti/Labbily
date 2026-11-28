@@ -181,6 +181,9 @@ def process_event():
                 if e['kind']=='text' and not e.get('media'):
                     from .agent_engine import handle_inbound
                     handle_inbound(db,a,ticket_id,message_id,str(e['body'])[:4000],stamp)
+                from .flow_runtime import on_inbound
+                if not ticket or stamp>=ticket['last_customer_at']:
+                    on_inbound(db,tid,ticket_id,message_id,str(e['body']),not ticket or (ticket['status'] in ('closed','resolved') and new_state=='new'))
                 db.execute('UPDATE service_accounts SET last_inbound_at=? WHERE id=?',(now(),aid))
             db.execute("UPDATE service_events SET state='processed',processed_at=?,error='' WHERE id=?",(clock,eid))
         return True
@@ -204,6 +207,10 @@ def policy(db,a,ticket,payload):
     if not token(a): raise HTTPException(409,'channel_credentials_missing')
     if a['expires_at'] and a['expires_at']<=int(time.time()): raise HTTPException(409,'token_expired_reauthorize')
     if settings(db,a['tenant_id'])['sending_paused']: raise HTTPException(409,'sending_paused')
+    if one(db,"""SELECT p.contact_id FROM service_identities i JOIN contacts c ON c.id=i.customer_id AND c.tenant_id=i.tenant_id
+                 JOIN contact_profiles p ON p.contact_id=c.id WHERE i.id=? AND i.tenant_id=? AND p.blocked=1""",(ticket['identity_id'],a['tenant_id'])):
+        raise HTTPException(409,'contact_messages_blocked')
+
     if ticket['status'] in {'closed','resolved'}: raise HTTPException(409,'reopen_ticket_before_reply')
     kind=payload.get('kind','text')
     if kind not in capabilities(a['channel'])['types']: raise HTTPException(422,'unsupported_message_type')
@@ -241,6 +248,9 @@ def send_outbox():
             if 'agent_id' in p:
                 from .agent_engine import dispatch_allowed
                 if not dispatch_allowed(db,t,a,p): raise HTTPException(409,'agent_ownership_changed')
+            elif 'flow_run_id' in p:
+                from .flow_runtime import dispatch_allowed
+                if not dispatch_allowed(db,t,p):raise HTTPException(409,'workflow_control_changed')
             elif not actor or (actor['role']=='sales' and t['assignee_id']!=actor['id']): raise HTTPException(403,'sender_permission_changed')
         except HTTPException as e:
             db.execute("UPDATE service_outbox SET state='blocked',error=? WHERE id=?",(str(e.detail),o['id']))
@@ -296,7 +306,9 @@ def send_outbox():
         if reauth: db.execute("UPDATE service_accounts SET state='reauthorize' WHERE id=? AND state!='disconnected'",(a['id'],))
         if pid:
             db.execute('UPDATE service_accounts SET last_outbound_at=? WHERE id=?',(now(),a['id']))
-            if 'agent_id' not in p: db.execute('UPDATE service_tickets SET first_human_at=COALESCE(first_human_at,?) WHERE id=?',(int(time.time()),t['id']))
+            if 'flow_run_id' in p:
+                db.execute("UPDATE workspace_flow_runs SET state=?,due_at=0 WHERE id=? AND state='dispatch'",('answer' if p['flow_question'] else 'queued',p['flow_run_id']))
+            if 'agent_id' not in p and 'flow_run_id' not in p: db.execute('UPDATE service_tickets SET first_human_at=COALESCE(first_human_at,?) WHERE id=?',(int(time.time()),t['id']))
             for event in rows(db,'SELECT * FROM service_status_history WHERE account_id=? AND provider_id=? ORDER BY occurred_at',(a['id'],pid)):
                 apply_status(db,a['id'],pid,event['status'],event['occurred_at'])
             if a['channel']=='messenger':
