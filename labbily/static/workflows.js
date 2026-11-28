@@ -20,7 +20,7 @@ const flowTemplates=[
   [sv('تأهيل وتسليم','Qualify and hand over'),'manual',[{action:'question',value:sv('ما الخدمة التي تهمك؟','Which service are you interested in?')},{action:'tag',value:'qualified'},{action:'assign',value:'sales'}]]
 ];
 async function workflowsView(main, ident=null, preset=null) {
-  const [flow,crm,team]=await Promise.all([ident?api('/v2/workflows/'+ident):null,api('/v2/crm/settings'),api('/team')]);
+  const [flow,crm,team,groups]=await Promise.all([ident?api('/v2/workflows/'+ident):null,api('/v2/crm/settings'),api('/team'),api('/v2/workspace/team-options')]);
   const stages=[['new',sv('جديد','New')],['interested',sv('مهتم','Interested')],['payment',sv('بانتظار الدفع','Awaiting payment')],['customer',sv('عميل','Customer')],['uninterested',sv('غير مهتم','Not interested')],...crm.stages.map(s=>[s.id,s.name])];
   const wrap=fn=>studioActions(main,fn);
   let dirty=false;
@@ -33,12 +33,12 @@ async function workflowsView(main, ident=null, preset=null) {
     '<button type="submit">'+sv('حفظ كمسودة','Save draft')+'</button></header>'+
     '<div class="flow-paper"><div class="flow-controls">'+
     studioButton('zoom-in','＋')+'<output id="flow-scale">100%</output>'+studioButton('zoom-out','−')+studioButton('zoom-reset','⊙')+
-    studioButton('flow-undo','↶')+studioButton('flow-redo','↷')+'</div><div class="flow-scroll"><div class="flow-stack">'+
+    studioButton('flow-undo','↶')+studioButton('flow-redo','↷')+'</div><div class="flow-scroll" tabindex="0"><div class="flow-world"><div class="flow-stack">'+
     '<details class="flow-trigger" open><summary><span class="node-icon">'+icon('automation')+'</span><span><small>'+sv('المحفّز','Trigger')+'</small><strong id="trigger-title"></strong></span></summary><div>'+
     select('trigger',sv('عند حدوث','When this happens'),Object.entries(flowTriggers),flow?.trigger_type||'contact_created')+
     (flow?'':select('template',sv('قالب البداية','Starting template'),[['',blank],...flowTemplates.map(([name],i)=>[String(i),name])]))+
     '</div></details><ol class="flow-steps"></ol>'+studioButton('add-step',sv('＋ إضافة خطوة','＋ Add step'))+
-    '</div></div></div></form><section id="flow-run"></section>';
+    '</div></div></div></div></form><section id="flow-run"></section>';
   const form=board.querySelector('form'),nodes=form.querySelector('ol'),run=board.querySelector('#flow-run');
   let steps=flow?.draft||[{action:'condition',field:'source',value:'manual',otherwise:2}];
   const crmTrigger=()=>form.elements.trigger.value==='contact_created';
@@ -60,13 +60,39 @@ async function workflowsView(main, ident=null, preset=null) {
     steps=state.steps;dirty=true;draw();historyControls();
   }
   undo.onclick=()=>restore(past,future);redo.onclick=()=>restore(future,past);
+  const viewport=board.querySelector('.flow-scroll'),world=viewport.firstElementChild;
+  function center(){viewport.scrollLeft=(world.offsetWidth-viewport.clientWidth)/2;viewport.scrollTop=world.offsetTop+260}
+  requestAnimationFrame(center);
+  let gesture=null;
+  viewport.onpointerdown=e=>{
+    if(e.button!==0||e.target.closest('input,select,button,summary,textarea,label,.node-fields'))return;
+    gesture={x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};
+    viewport.setPointerCapture(e.pointerId);viewport.classList.add('panning');e.preventDefault();
+  };
+  viewport.onpointermove=e=>{if(gesture){viewport.scrollLeft=gesture.left+gesture.x-e.clientX;viewport.scrollTop=gesture.top+gesture.y-e.clientY}};
+  viewport.onlostpointercapture=()=>{gesture=null;viewport.classList.remove('panning')};
   const labels={'flow-undo':sv('تراجع','Undo'),'flow-redo':sv('إعادة','Redo'),'zoom-in':sv('تكبير','Zoom in'),'zoom-out':sv('تصغير','Zoom out'),'zoom-reset':sv('الحجم الأصلي','Reset zoom')};
   for(const [id,label] of Object.entries(labels)){
     const el=board.querySelector('#'+id);el.title=label;el.setAttribute('aria-label',label);
-    if(id.startsWith('zoom'))el.onclick=()=>{scale=id==='zoom-reset'?100:Math.max(60,Math.min(150,scale+(id==='zoom-in'?10:-10)));board.querySelector('.flow-stack').style.zoom=scale+'%';board.querySelector('#flow-scale').textContent=scale+'%'};
+    if(id.startsWith('zoom'))el.onclick=()=>{scale=id==='zoom-reset'?100:Math.max(60,Math.min(150,scale+(id==='zoom-in'?10:-10)));board.querySelector('.flow-stack').style.zoom=scale+'%';board.querySelector('#flow-scale').textContent=scale+'%';if(id==='zoom-reset')center()};
   }
   board.querySelector('#flow-back').onclick=wrap(async()=>{if(!dirty||confirm(sv('تجاهل تعديلات المسودة؟','Discard draft edits?')))await workflowDirectory(main)});
   form.addEventListener('invalid',e=>{const group=e.target.closest('details');if(group)group.open=true},true);
+  function reorder(next,openIndex){
+    const destination=new Map();
+    for(const step of next.filter(s=>s.action==='condition')){
+      const target=steps[step.otherwise-1];
+      if(target&&!next.includes(target)){toast(sv('غيّر وجهة الشرط قبل حذف هذه الخطوة','Change the branch destination before removing this step'));return}
+      const position=target?next.indexOf(target)+1:next.length+1;
+      if(position<=next.indexOf(step)+1){toast(sv('وجهة الشرط يجب أن تلي الشرط','Branch destinations must follow the condition'));return}
+      destination.set(step,position);
+    }
+    destination.forEach((pos,step)=>{step.otherwise=pos});steps=next;draw(openIndex);remember();
+  }
+  function move(from,to){
+    if(to<0||to>=steps.length||from===to)return;
+    const next=steps.slice();next.splice(to,0,next.splice(from,1)[0]);reorder(next,to);
+  }
   function draw(openIndex=-1){
     board.querySelector('#trigger-title').textContent=flowTriggers[form.elements.trigger.value];
     nodes.replaceChildren();
@@ -84,6 +110,7 @@ async function workflowsView(main, ident=null, preset=null) {
         for(const person of team.filter(p=>p.active&&['admin','supervisor','sales'].includes(p.role))){
           const option=document.createElement('option');option.value='user:'+person.id;option.label=person.name;entries.append(option)
         }
+        for(const g of groups){const opt=document.createElement('option');opt.value='team:'+g.id;opt.label=g.name;entries.append(opt)}
         node.append(entries);node.querySelector('[name=value]').setAttribute('list',entries.id);
       }
       const inputs=node.querySelectorAll('input,select');
@@ -92,8 +119,20 @@ async function workflowsView(main, ident=null, preset=null) {
         const key=input.name==='match'?'field':input.name;const capture=()=>{step[key]=key==='otherwise'?Number(input.value):input.value};
         capture();input.oninput=()=>{capture();node.querySelector('.node-description').textContent=step.value;remember()};
       }
-      node.querySelector('button').onclick=()=>{steps.splice(i,1);draw();remember()};
-      nodes.append(node);
+      node.querySelector('button').onclick=()=>{reorder(steps.filter((_,index)=>index!==i),-1)};
+      const tools=document.createElement('div');tools.className='node-order';
+      tools.innerHTML=studioButton('move-up-'+i,'↑')+studioButton('drag-step-'+i,'⠿')+studioButton('move-down-'+i,'↓');
+      const [up,handle,down]=tools.children;up.disabled=i===0;down.disabled=i===steps.length-1;
+      up.title=sv('تحريك للأعلى','Move earlier');down.title=sv('تحريك للأسفل','Move later');handle.title=sv('اسحب لإعادة ترتيب الخطوة','Drag to reorder step');
+      for(const b of tools.children)b.setAttribute('aria-label',b.title);
+      up.onclick=()=>move(i,i-1);down.onclick=()=>move(i,i+1);
+      handle.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();handle.setPointerCapture(e.pointerId);node.classList.add('moving')};
+      const target=e=>document.elementFromPoint(e.clientX,e.clientY)?.closest('.flow-node');
+      handle.onpointermove=e=>{if(!handle.hasPointerCapture(e.pointerId))return;nodes.querySelector('.drop-target')?.classList.remove('drop-target');target(e)?.classList.add('drop-target');
+        const bounds=viewport.getBoundingClientRect();if(e.clientY>bounds.bottom-45)viewport.scrollTop+=12;else if(e.clientY<bounds.top+45)viewport.scrollTop-=12};
+      handle.onpointerup=e=>{const dest=target(e);if(dest&&nodes.contains(dest))move(i,Array.from(nodes.children).indexOf(dest))};
+      handle.onlostpointercapture=()=>{node.classList.remove('moving');nodes.querySelector('.drop-target')?.classList.remove('drop-target')};
+      node.append(tools);nodes.append(node);
     });
   }
   function useTemplate(key){
@@ -115,7 +154,7 @@ async function workflowsView(main, ident=null, preset=null) {
   };
   if(form.elements.template)form.elements.template.onchange=e=>{useTemplate(e.target.value);remember()};
   const add=form.querySelector('#add-step');
-  add.onclick=()=>{if(steps.length<12){steps.push({action:crmTrigger()?'tag':'message',value:''});draw(steps.length-1);remember()}else toast(sv('الحد 12 خطوة','Maximum 12 steps'))};
+  add.onclick=()=>{if(steps.length<12){reorder([...steps,{action:crmTrigger()?'tag':'message',value:''}],steps.length)}else toast(sv('الحد 12 خطوة','Maximum 12 steps'))};
   bindForm(form,async()=>{
     const r=await send('/v2/workflows'+(ident?'/'+ident:''),ident?'PUT':'POST',{name:form.elements.name.value,trigger:form.elements.trigger.value,revision:flow?.revision||0,steps});
     await workflowsView(main,r.id);

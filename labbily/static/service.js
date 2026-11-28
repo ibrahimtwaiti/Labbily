@@ -99,7 +99,9 @@ inboxView=async function(main){
  more.onclick=()=>loadPage(true).catch(e=>toast(e.message));
  addInboxControls(main,data,views,change,open);
  const pane=main.querySelector('.service-list');
- pane.prepend(main.querySelector('.service-kpis'),main.querySelector('.service-toolbar'));
+ const title=main.querySelector('.page-heading');
+ title.querySelector('h1').textContent=sv('المحادثات','Conversations');title.querySelector('p').remove();
+ pane.prepend(title,main.querySelector('.service-toolbar'),main.querySelector('.service-kpis'));
  list();
  const linked=new URLSearchParams(location.search).get('ticket');
  if(!serviceSelection && linked && /^[a-zA-Z0-9-]{1,64}$/.test(linked))await open(linked);

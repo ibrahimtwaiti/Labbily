@@ -2,6 +2,7 @@
 const brandName=()=>LANG==='en'?(identity().name_en||'Labbily'):(identity().name||'Labbily');
 const identity=()=>catalog?.brand||{};
 function icon(name='dashboard') {
+  if(name==='setup-checklist') return '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 6 2 2 3-4m3 3h10M3 13l2 2 3-4m3 3h10M4 20h3m4 0h10"/></svg>';
   if (name==='arrow' || name==='check') {
     const path = name==='arrow' ? 'M19 12H5m6-6-6 6 6 6' : 'm5 12 4 4L19 6';
     return `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><path d="${path}"/></svg>`;

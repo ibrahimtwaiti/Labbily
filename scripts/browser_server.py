@@ -23,6 +23,7 @@ with tempfile.TemporaryDirectory(prefix='labbily-browser-') as folder:
         db.execute('INSERT INTO users VALUES(?,?,?,?,?,?,1,?)',('ui-agent','ui-service','service@example.test','Service QA',hash_password('service-test-password'),'admin',now()))
         db.execute('INSERT INTO service_accounts(id,tenant_id,channel,provider_id,label,api_version,state,created_at) VALUES(?,?,?,?,?,?,?,?)',('ui-whatsapp','ui-service','whatsapp','123456','QA WhatsApp','v27.0','verified',now()))
         db.execute('INSERT INTO users VALUES(?,?,?,?,?,?,1,?)',('ui-meta','ui-service','meta@example.test','Meta QA',hash_password('service-test-password'),'admin',now()))
+        db.execute('INSERT INTO users VALUES(?,?,?,?,?,?,1,?)',('ui-controls','ui-service','controls@example.test','Controls QA',hash_password('service-test-password'),'admin',now()))
     service.persist_events('whatsapp',{'object':'whatsapp_business_account','entry':[{'changes':[{'value':{'metadata':{'phone_number_id':'123456'},'messages':[{'id':'qa-inbound','from':'966500000001','timestamp':str(int(time.time())),'type':'text','text':{'body':'Hello, I need an appointment'}}]}}]}]})
     service.process_event()
     # These routes exist only in this disposable test process, never in labbily.main.

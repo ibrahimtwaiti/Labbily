@@ -1,0 +1,32 @@
+const {test,expect}=require('@playwright/test');
+test('workspace settings, campaign pictures and two-axis workflow editing',async({page})=>{
+ await page.goto('/login?lang=en');
+ await page.locator('[name=email]').fill('controls@example.test');await page.locator('[name=password]').fill('service-test-password');await page.locator('#login-form button').click();await page.waitForURL('**/app');
+ await expect(page.locator('#workspace-nav [href="/app/opportunities"]')).toHaveCount(0);
+ await page.goto('/app/settings?section=library&lang=en');
+ await expect(page.locator('.template-card')).toHaveCount(31);
+ await page.locator('[data-industry=property]').click();await expect(page.locator('.template-card')).toHaveCount(3);
+ await page.locator('[data-model=viewing_confirmation]').click();await page.locator('#dialog [name=name]').fill('qa_viewing');await page.locator('#dialog [type=submit]').click();await expect(page.locator('#dialog')).toBeHidden();
+ await page.goto('/app/settings?section=templates&lang=en');await expect(page.locator('#settings-panel')).toContainText('qa_viewing');
+ await page.goto('/app/settings?section=fields&lang=en');await page.locator('#new-field').click();await page.locator('#dialog [name=name]').fill('Area');await page.locator('#dialog [type=submit]').click();await expect(page.locator('#settings-panel td').first()).toHaveText('Area');
+ await page.goto('/app/campaigns?lang=en');await page.locator('#new-campaign').click();
+ const dialog=page.locator('#dialog');await dialog.locator('[name=name]').fill('Image campaign');
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=30;c.height=20;return c.toDataURL().split(',')[1]});
+ await dialog.locator('[type=file]').setInputFiles({name:'campaign.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+ await expect(dialog.locator('.campaign-picture img')).toBeVisible();await dialog.locator('[type=submit]').click();
+ await expect(page.locator('.campaign-thumb')).toBeVisible();await page.reload();
+ await page.locator('tr').filter({hasText:'Image campaign'}).locator('button').click();
+ await expect(dialog.locator('.campaign-picture img')).toBeVisible();await dialog.locator('#remove-picture').click();await dialog.locator('[name=body]').fill('Text version');await dialog.locator('[type=submit]').click();await expect(page.locator('.campaign-thumb')).toHaveCount(0);
+ await page.goto('/app/workflows?lang=en');await page.locator('#flow-templates').click();await page.locator('[data-template="3"]').click();
+ const viewport=page.locator('.flow-scroll');await viewport.scrollIntoViewIfNeeded();
+ const initial=await viewport.evaluate(el=>[el.scrollLeft,el.scrollTop]);
+ const [x,y]=await viewport.evaluate(v=>{const r=v.getBoundingClientRect();for(let y=r.top+30;y<Math.min(r.bottom,innerHeight)-30;y+=12){for(let x=r.left+12;x<Math.min(r.right,innerWidth)-12;x+=12){if(document.elementFromPoint(x,y)?.matches('.flow-world'))return [x,y]}}throw Error('Canvas background not accessible')});
+ await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+55,y+43,{steps:5});await page.mouse.up();
+ const moved=await viewport.evaluate(el=>[el.scrollLeft,el.scrollTop]);expect(Math.abs(moved[0]-initial[0])).toBeGreaterThan(10);expect(Math.abs(moved[1]-initial[1])).toBeGreaterThan(10);
+ await page.locator('#zoom-reset').click();
+ const step=page.locator('.flow-node');await step.nth(1).scrollIntoViewIfNeeded();
+ await page.locator('#drag-step-0').dragTo(step.nth(1).locator('summary'));
+ await expect(step.first().locator('summary strong')).toHaveText('Add tag');
+ await page.locator('#flow-undo').click();await expect(step.first().locator('summary strong')).toHaveText('Ask and await reply');
+});
+

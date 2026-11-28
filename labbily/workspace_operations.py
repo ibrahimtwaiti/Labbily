@@ -1,5 +1,10 @@
 """Tenant workspace setup, CRM-stage reporting and campaign planning."""
+import base64
+import binascii
+import io
 from typing import Literal
+from fastapi.responses import Response
+from PIL import Image
 from fastapi import Depends, HTTPException
 from pydantic import Field
 from .agent_api import Input
@@ -40,7 +45,8 @@ class Campaign(Input):
     name: str = Field(min_length=1,max_length=120)
     channel: Literal['whatsapp','messenger','instagram']
     segment_id: str = Field(default='',max_length=120)
-    body: str = Field(min_length=1,max_length=3500)
+    body: str = Field(default='',max_length=3500)
+    image: str | None = Field(default=None,max_length=1400000)
     planned_at: str = Field(default='',max_length=40)
     state: Literal['draft','planned','paused']='draft'
     revision: int = Field(default=0,ge=0)
@@ -51,7 +57,7 @@ def campaigns(u=Depends(user)):
     permit(u,'settings')
     tid=u['tenant_id']
     with transaction() as db:
-        return {'items':rows(db,"""SELECT c.*,s.name segment FROM workspace_campaigns c
+        return {'items':rows(db,"""SELECT c.*,s.name segment,EXISTS(SELECT 1 FROM campaign_images i WHERE i.campaign_id=c.id) AS has_image FROM workspace_campaigns c
                   LEFT JOIN contact_segments s ON s.id=c.segment_id WHERE c.tenant_id=? ORDER BY c.created_at DESC,c.id""",(tid,)),
                 'segments':rows(db,'SELECT id,name FROM contact_segments WHERE tenant_id=? ORDER BY name,id',(tid,)),
                 'metrics':rows(db,"""SELECT t.campaign,m.status,COUNT(*) total FROM service_messages m
@@ -64,7 +70,8 @@ def campaigns(u=Depends(user)):
 def save_campaign(data,u,ident=None):
     permit(u,'settings')
     name,body=data.name.strip(),data.body.strip()
-    if not name or not body:raise HTTPException(422,'name_and_message_required')
+    if not name:raise HTTPException(422,'campaign_name_required')
+    image=normalize_image(data.image) if data.image else data.image
     due=valid_date(data.planned_at) if data.planned_at else None
     if data.state=='planned' and due is None:raise HTTPException(422,'planning_date_required')
     with transaction() as db:
@@ -73,6 +80,8 @@ def save_campaign(data,u,ident=None):
             old=get(db,'workspace_campaigns',ident,u,True)
             if old['revision']!=data.revision:raise HTTPException(409,'campaign_changed_reload')
             if old['name']!=name or old['channel']!=data.channel:raise HTTPException(422,'campaign_attribution_is_fixed')
+        retained=ident and image is None and one(db,'SELECT 1 AS present FROM campaign_images WHERE campaign_id=?',(ident,))
+        if not (body or image or retained):raise HTTPException(422,'message_or_image_required')
         if data.segment_id:get(db,'contact_segments',data.segment_id,u)
         if ident:
             db.execute('UPDATE workspace_campaigns SET segment_id=?,body=?,planned_at=?,state=?,revision=revision+1 WHERE id=? AND tenant_id=?',
@@ -83,6 +92,11 @@ def save_campaign(data,u,ident=None):
                              VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,name) DO NOTHING""",
                            (ident,tid,name,data.channel,data.segment_id or None,body,due,data.state,now())).rowcount
             if not inserted:raise HTTPException(409,'campaign_name_already_exists')
+        if image is not None:
+            if image:
+                db.execute('INSERT INTO campaign_images VALUES(?,?) ON CONFLICT(campaign_id) DO UPDATE SET content=excluded.content',(ident,image))
+            else:
+                db.execute('DELETE FROM campaign_images WHERE campaign_id=?',(ident,))
         audit(db,u,'campaign.plan.saved',ident)
     return {'id':ident}
 
@@ -96,3 +110,25 @@ def create_campaign(data:Campaign,u=Depends(user)):
 def edit_campaign(ident:str,data:Campaign,u=Depends(user)):
     return save_campaign(data,u,ident)
 
+
+def normalize_image(encoded):
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+        with Image.open(io.BytesIO(raw), formats=['JPEG','PNG','WEBP']) as source:
+            if max(source.size)>3200 or source.width*source.height>5000000:
+                raise ValueError()
+            source.thumbnail((1600,1600))
+            output=io.BytesIO()
+            source.convert('RGB').save(output,format='JPEG',quality=82)
+        return base64.b64encode(output.getvalue()).decode()
+    except (ValueError,OSError,binascii.Error,Image.DecompressionBombError):
+        raise HTTPException(422,'invalid_campaign_image')
+
+
+@router.get('/api/v2/campaigns/{ident}/image')
+def campaign_image(ident:str,u=Depends(user)):
+    permit(u,'settings')
+    with transaction() as db:
+        row=one(db,"SELECT i.content FROM campaign_images i JOIN workspace_campaigns c ON c.id=i.campaign_id WHERE c.id=? AND c.tenant_id=?",(ident,u['tenant_id']))
+    if not row:raise HTTPException(404,'image_not_found')
+    return Response(base64.b64decode(row['content']),media_type='image/jpeg',headers={'Cache-Control':'private, no-store'})

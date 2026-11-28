@@ -3,7 +3,7 @@ import json
 import time
 from fastapi import HTTPException
 from .agent_engine import HUMAN, normalized
-from .db import now, one, postgres, transaction, uid
+from .db import now, one, rows, postgres, transaction, uid
 from . import service
 
 
@@ -138,6 +138,12 @@ def perform(db,run,t,step,clock):
             if not member:raise HTTPException(409,'assignee_unavailable')
             workload=db.execute("SELECT count(*) FROM service_tickets WHERE assignee_id=? AND status NOT IN ('closed','resolved')",(owner,)).fetchone()[0]
             if workload>=cfg['max_active']:raise HTTPException(409,'assignee_at_capacity')
+        elif value.startswith('team:'):
+            group=one(db,'SELECT name FROM workspace_teams WHERE tenant_id=? AND id=?',(t['tenant_id'],value[5:]))
+            if not group:raise HTTPException(409,'team_unavailable')
+            team=group['name']
+            members={r['user_id'] for r in rows(db,'SELECT user_id FROM workspace_team_members WHERE team_id=?',(value[5:],))}
+            owner=service.choose_agent(db,t['tenant_id'],{**cfg,'available_agents':[a for a in cfg['available_agents'] if a in members]})
         else:
             team=value
         db.execute("UPDATE service_tickets SET team=?,assignee_id=?,automation_paused=1,status='waiting_internal',version=version+1,updated_at=? WHERE id=?",(team,owner,clock,t['id']))

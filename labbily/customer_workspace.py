@@ -30,6 +30,7 @@ class Stage(Input):
 
 
 class Profile(Input):
+    custom: dict[str,str] = Field(default_factory=dict,max_length=100)
     blocked: bool | None = None
     stage: str = Field(max_length=64)
     email: str = Field(default='', max_length=254)
@@ -139,7 +140,9 @@ def update_profile(ident: str, data: Profile, u=Depends(user)):
             db.execute('INSERT INTO contact_stage_history VALUES(?,?,?,?)', (uid(), ident, data.stage, now()))
         triggers=[]
         if previous['stage']!=data.stage:triggers.append('stage_changed')
-        if contact['tags']!=data.tags.strip() or previous.get('email','')!=address:triggers.append('field_changed')
+        from .workspace_controls import store_values
+        fields_changed=store_values(db,u['tenant_id'],ident,data.custom)
+        if fields_changed or contact['tags']!=data.tags.strip() or previous.get('email','')!=address:triggers.append('field_changed')
         if triggers:
             from .flow_runtime import trigger
             # Use the latest linked conversation as the execution context.

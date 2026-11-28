@@ -42,7 +42,7 @@ app=FastAPI(title='Labbily API',version='2.0.0-rc.4',lifespan=lifespan,docs_url=
 @app.middleware('http')
 async def protect(request, call_next):
     if request.method in {'POST','PATCH','PUT','DELETE'}:
-        if len(await request.body())>(8*1024*1024 if request.url.path.startswith('/api/v2/tickets/') and request.url.path.endswith('/attachments') else 2200000 if request.url.path in ('/api/admin/brand','/api/v2/agent-knowledge/import') else 512000 if request.url.path.startswith('/api/v2/agents/') and request.method=='PUT' else 65536):
+        if len(await request.body())>(8*1024*1024 if request.url.path.startswith('/api/v2/tickets/') and request.url.path.endswith('/attachments') else 2200000 if request.url.path in ('/api/admin/brand','/api/v2/agent-knowledge/import') else 1500000 if request.url.path.startswith('/api/v2/campaigns') else 512000 if request.url.path.startswith('/api/v2/agents/') and request.method=='PUT' else 65536):
             return JSONResponse({'detail':'حجم الطلب أكبر من المسموح'},413)
         if not (request.url.path.startswith('/api/webhooks/') or request.url.path == '/api/internal/drain-webhooks'):
             origin=('https://' + request.headers.get('host','') if os.getenv('VERCEL_ENV') in ('preview','production') else os.getenv('LABBILY_ORIGIN','http://localhost:8000'))
@@ -647,7 +647,7 @@ def sitemap(request:Request):
 
 from .service_api import router as service_router
 from . import service_oauth, service_media, service_lifecycle, service_channels, provider_console, meta_onboarding, meta_lifecycle, saas, meta_pages, email_verification, privacy, meta_data, messenger_metrics, page_posts, api_docs
-from . import agent_api, agent_knowledge, inbox_workspace, agent_jobs, agent_retrieval, customer_workspace, flows, workspace_operations
+from . import agent_api, agent_knowledge, inbox_workspace, agent_jobs, agent_retrieval, customer_workspace, flows, workspace_operations, workspace_controls
 app.include_router(service_router)
 
 app.mount('/static' ,StaticFiles(directory=STATIC),name='static')

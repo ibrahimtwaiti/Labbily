@@ -52,12 +52,14 @@ async function contactsView(main) {
         const c=items.find(x=>x.id===id), history=await api('/v2/crm/contacts/'+id+'/history');
         if(!grid.isConnected) return;
         const timeline=history.length?'<ol class="full">'+history.map(h=>'<li>'+esc(stageName(h.stage))+' · '+esc(date(h.changed_at))+'</li>').join('')+'</ol>':'';
+        const attributes=await api('/v2/crm/contacts/'+id+'/fields');
+        const extra=attributes.map(a=>editable?field('custom_'+a.id,a.name,a.kind,a.value||'',false):'<p>'+esc(a.name)+' · '+esc(a.value||'—')+'</p>').join('');
         if(!editable) {
-          modal(c.name,'<p>'+esc(stageName(c.stage))+' · '+esc(c.email||'—')+'</p>'+timeline,async()=>{});
+          modal(c.name,'<p>'+esc(stageName(c.stage))+' · '+esc(c.email||'—')+'</p>'+extra+timeline,async()=>{});
           return;
         }
-        modal(c.name,select('stage',sv('مرحلة العميل','Lifecycle stage'),stages,c.stage)+field('email',sv('البريد','Email'),'email',c.email,false)+field('tags',tr("الوسوم"),'text',c.tags,false)+(me.role==='sales'?'':select('delivery',sv('الرسائل الصادرة','Outbound messages'),[['allow',sv('مسموحة','Allowed')],['block',sv('محظورة','Blocked')]],c.blocked?'block':'allow'))+timeline,
-          ({delivery,...d})=>send('/v2/crm/contacts/'+id,'PUT',{...d,...(delivery?{blocked:delivery==='block'}:{}),revision:c.revision}));
+        modal(c.name,select('stage',sv('مرحلة العميل','Lifecycle stage'),stages,c.stage)+field('email',sv('البريد','Email'),'email',c.email,false)+field('tags',tr("الوسوم"),'text',c.tags,false)+(me.role==='sales'?'':select('delivery',sv('الرسائل الصادرة','Outbound messages'),[['allow',sv('مسموحة','Allowed')],['block',sv('محظورة','Blocked')]],c.blocked?'block':'allow'))+extra+timeline,
+          ({delivery,stage,email,tags,...d})=>send('/v2/crm/contacts/'+id,'PUT',{stage,email,tags,custom:Object.fromEntries(attributes.map(a=>[a.id,d['custom_'+a.id]])),...(delivery?{blocked:delivery==='block'}:{}),revision:c.revision}));
       });
       wireRows('data-consent',id=>{
         const c=items.find(x=>x.id===id);

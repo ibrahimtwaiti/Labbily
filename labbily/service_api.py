@@ -239,7 +239,9 @@ def enqueue(ident:str,data:dict,request:Request,u=Depends(user)):
             if mentioned:
                 receiver=one(db,"SELECT id,role FROM users WHERE tenant_id=? AND id=? AND active=1 AND role IN ('admin','supervisor','sales')",(u['tenant_id'],mentioned))
                 if not receiver or (receiver['role']=='sales' and t['assignee_id']!=receiver['id']):raise HTTPException(422,'mention_requires_ticket_access')
-                db.execute('INSERT INTO notifications(id,user_id,title,entity_id,created_at) VALUES(?,?,?,?,?)',(uid(),receiver['id'],'إشارة في ملاحظة داخلية / Internal mention',ident,now()))
+                from .workspace_controls import allow_mention
+                if allow_mention(db,receiver['id']):
+                    db.execute('INSERT INTO notifications(id,user_id,title,entity_id,created_at) VALUES(?,?,?,?,?)',(uid(),receiver['id'],'إشارة في ملاحظة داخلية / Internal mention',ident,now()))
         audit(db,u,'service.message.'+direction,mid)
     return {'id':mid,'status':state}
 

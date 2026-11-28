@@ -150,6 +150,9 @@ def migrate():
             if conn.execute('SELECT version FROM schema_migrations WHERE version=17').fetchone() is None:
                 for statement in (ROOT / 'migrations/018_task_calendar.sql').read_text().split(';'):
                     if statement.strip(): conn.execute(statement)
+            if conn.execute('SELECT version FROM schema_migrations WHERE version=18').fetchone() is None:
+                for statement in (ROOT / 'migrations/019_workspace_controls.sql').read_text().split(';'):
+                    if statement.strip(): conn.execute(statement)
 
 def initialize():
     if postgres():
@@ -188,6 +191,8 @@ def initialize():
                 raise RuntimeError('Focused workspace migration missing: python -m labbily.cli init')
             if not one(db, 'SELECT version FROM schema_migrations WHERE version=17'):
                 raise RuntimeError('Task calendar migration missing: python -m labbily.cli init')
+            if not one(db, 'SELECT version FROM schema_migrations WHERE version=18'):
+                raise RuntimeError('Workspace controls migration missing: python -m labbily.cli init')
         return
     Path(path()).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path()) as db:
@@ -246,6 +251,8 @@ def initialize():
             db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/017_focused_workspace.sql').read_text() + 'COMMIT;')
         if not db.execute('SELECT version FROM schema_migrations WHERE version=17').fetchone():
             db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/018_task_calendar.sql').read_text() + 'COMMIT;')
+        if not db.execute('SELECT version FROM schema_migrations WHERE version=18').fetchone():
+            db.executescript('BEGIN IMMEDIATE;' + (ROOT / 'migrations/019_workspace_controls.sql').read_text() + 'COMMIT;')
 
 def audit(db, user, action, entity, detail=''):
     db.execute('INSERT INTO audit VALUES(?,?,?,?,?,?,?)',

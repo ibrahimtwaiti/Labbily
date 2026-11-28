@@ -160,7 +160,7 @@ def purge_accounts(db,accounts,data):
 def purge(db,job,targets):
     purge_accounts(db,targets['accounts'],targets['data_accounts'])
     ids=targets['users'];tid=job['tenant_id']
-    for table in ['email_jobs','email_verifications','service_registrations','sessions','notifications','meta_signup_sessions','meta_page_sessions','meta_data_sessions','service_oauth_states']:remove(db,table,'user_id',ids)
+    for table in ['workspace_team_members','inbox_preferences','email_jobs','email_verifications','service_registrations','sessions','notifications','meta_signup_sessions','meta_page_sessions','meta_data_sessions','service_oauth_states']:remove(db,table,'user_id',ids)
     if job['scope']=='user':
         remove(db,'retention_holds','entity_id',ids)
         db.execute("UPDATE users SET email=?,name='Deleted user',password_hash='',active=0 WHERE id=?",('deleted-'+uid()+'@invalid.example',job['requester_id']))
@@ -180,7 +180,7 @@ def purge(db,job,targets):
         if not changed:continue
         if entries:db.execute('UPDATE webhook_events SET payload=? WHERE id=?',(json.dumps({**payload,'entry':entries}),e['id']))
         else:remove(db,'webhook_events','id',[e['id']])
-    for table in ['messages','conversations','opportunities','tasks','contacts','contact_stages','contact_segments','channels','service_replies','service_settings','service_retention_policy','service_sandbox_invoices','service_usage_counters','service_subscriptions','service_registrations','meta_api_usage','meta_signup_sessions','meta_page_sessions','meta_data_sessions','meta_business_accounts']:
+    for table in ['wa_template_drafts','workspace_teams','workspace_fields','messages','conversations','opportunities','tasks','contacts','contact_stages','contact_segments','channels','service_replies','service_settings','service_retention_policy','service_sandbox_invoices','service_usage_counters','service_subscriptions','service_registrations','meta_api_usage','meta_signup_sessions','meta_page_sessions','meta_data_sessions','meta_business_accounts']:
         remove(db,table,'tenant_id',[tid])
     remove(db,'service_oauth_states','user_id',ids)
     db.execute('UPDATE audit SET actor_id=NULL,detail=? WHERE actor_id IN ('+marks(ids)+')',('',*ids)) if ids else None
